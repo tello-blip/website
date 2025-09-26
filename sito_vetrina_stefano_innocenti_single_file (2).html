@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Stefano Innocenti – Mechanical Engineer</title>
+  <meta name="description" content="Portfolio personale di Stefano Innocenti – Mechanical Engineer (Politecnico di Milano). Progetti, competenze e contatti." />
+  <style>
+    :root{
+      --bg-1:#0b1020; --bg-2:#101a33; --glass:#0b1226cc; --glass-2:#0b122699;
+      --panel:#0b132a88; --border:#334155; --text:#e6eefc; --muted:#9fb0d0;
+      --acc-1:#7dd3fc; --acc-2:#a78bfa; --acc-3:#2dd4bf; --ring:#60a5fa66;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%; margin:0}
+    body{
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans";
+      color:var(--text);
+      background:
+        radial-gradient(1400px 900px at 15% 5%, #1e3a8a, transparent 70%),
+        radial-gradient(1000px 800px at 75% 15%, #0ea5e9, transparent 60%),
+        linear-gradient(160deg, var(--bg-1), var(--bg-2));
+      overflow-x:hidden;
+    }
+
+    /* Canvas background */
+    #bg{position:fixed; inset:0; z-index:-1; display:block; width:100%; height:100%;}
+    /* New: fixed gradient layer so it never scrolls */
+    .grad{ position:fixed; inset:0; z-index:-2; pointer-events:none;
+      background:
+        radial-gradient(1400px 900px at 15% 5%, #1e3a8a, transparent 70%),
+        radial-gradient(1000px 800px at 75% 15%, #0ea5e9, transparent 60%),
+        linear-gradient(160deg, var(--bg-1), var(--bg-2));
+    }
+    .vignette{ pointer-events:none; position:fixed; inset:0; z-index:0;
+      background: radial-gradient(60% 60% at 50% 40%, transparent, #0008 70%);
+    }
+
+    /* Header */
+    header{ position:sticky; top:0; z-index:10; }
+    .navbar{ display:flex; gap:14px; align-items:center; justify-content:space-between; padding:10px 14px; margin:12px auto; max-width:1100px;
+      background:linear-gradient(180deg, var(--panel), #0b132a55); border:1px solid var(--border); border-radius:16px; backdrop-filter: blur(8px);
+      box-shadow:0 10px 30px #0006, inset 0 1px 0 #ffffff14; }
+    .brand{ display:flex; gap:10px; align-items:center; }
+    .brand svg{flex:0 0 24px}
+    .brand h1{ font-size:16px; margin:0; letter-spacing:.35px }
+    nav{ display:flex; gap:6px; flex-wrap:wrap }
+    nav a{ text-decoration:none; color:var(--text); padding:8px 10px; border:1px solid var(--border); border-radius:12px; background:#0b1226cc; font-weight:600 }
+    nav a:hover{ transform:translateY(-1px); border-color:#475569 }
+
+    /* Sections */
+    section{ max-width:1100px; margin:26px auto; padding:0 14px }
+    .hero{ display:grid; grid-template-columns:1.2fr .8fr; gap:16px; align-items:center; }
+    .card{ background:linear-gradient(180deg, #0b132a88, #0b132a55); border:1px solid var(--border); border-radius:18px; padding:16px; backdrop-filter: blur(8px);
+      box-shadow:0 16px 40px #0008, inset 0 1px 0 #ffffff14 }
+    .chip{ display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; border:1px solid var(--border); background:#0b1226cc; margin:4px 6px 0 0; font-weight:600 }
+
+    h2{ font-size:22px; margin:0 0 12px }
+    h3{ font-size:18px; margin:14px 0 6px }
+    p{ color:#d7e4ff; line-height:1.6 }
+    ul{ margin:8px 0 0 18px }
+
+    .btns{ display:flex; gap:10px; flex-wrap:wrap; margin-top:10px }
+    .btn{ display:inline-flex; align-items:center; gap:8px; padding:10px 12px; border-radius:12px; border:1px solid var(--border); background:#0b1226cc; color:var(--text); font-weight:700; text-decoration:none }
+    .btn:hover{ transform:translateY(-1px); border-color:#475569 }
+
+    .grid{ display:grid; gap:14px }
+    .grid.cols-2{ grid-template-columns:repeat(2, minmax(0,1fr)) }
+    .grid.cols-3{ grid-template-columns:repeat(3, minmax(0,1fr)) }
+    @media (max-width: 920px){ .hero{ grid-template-columns:1fr } .grid.cols-2,.grid.cols-3{ grid-template-columns:1fr } }
+
+    footer{ max-width:1100px; margin:26px auto 40px; padding:0 14px; text-align:center; color:var(--muted) }
+    .divider{ height:1px; background:linear-gradient(90deg, transparent, #60a5fa44, transparent); margin:18px 0 }
+
+    /* Subtle accent ring */
+    .ring{ position:relative }
+    .ring::after{ content:""; position:absolute; inset:-2px; border-radius:inherit; border:1px dashed var(--ring); pointer-events:none }
+    /* Override: keep body background static; gradients are now on .grad */
+    body{ background: linear-gradient(160deg, var(--bg-1), var(--bg-2)); }
+  </style>
+</head>
+<body>
+  <div class="grad" aria-hidden="true"></div>
+  <canvas id="bg" aria-hidden="true"></canvas>
+  <div class="vignette" aria-hidden="true"></div>
+
+  <header>
+    <div class="navbar ring">
+      <div class="brand">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <circle cx="12" cy="12" r="10" stroke="#7dd3fc" stroke-width="1.5"/>
+          <path d="M12 2a10 10 0 0 0 0 20c5.523 0 10-4.477 10-10" stroke="#a78bfa" stroke-width="1.5"/>
+          <path d="M4 12h16" stroke="#7dd3fc" stroke-width="1.2"/>
+        </svg>
+        <h1>Stefano Innocenti · Mechanical Engineer</h1>
+      </div>
+      <nav>
+        <a href="#profilo">Profilo</a>
+        <a href="#progetti">Progetti</a>
+        <a href="#competenze">Competenze</a>
+        <a href="#formazione">Formazione</a>
+        <a href="#contatti">Contatti</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="card ring">
+        <h2 style="font-size:28px; margin-top:4px">Ciao, sono <span style="color:var(--acc-1)">Stefano</span> 👋</h2>
+        <p>
+          Studente motivato di Ingegneria Meccanica al <strong>Politecnico di Milano</strong>, con interesse per
+          <strong>progettazione 3D CAD</strong>, <strong>prototipazione</strong>, <strong>analisi dati sperimentali</strong> e <strong>processi di assemblaggio</strong>.
+          Mi piace trasformare un modello in un oggetto reale, validandone prestazioni e affidabilità.
+        </p>
+        <div class="btns">
+          <a class="btn" href="#contatti" title="Scrivimi">
+            <!-- mail icon -->
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#93c5fd" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v12H4z"/><path d="m22 6-10 7L2 6"/></svg>
+            Contattami
+          </a>
+          <a class="btn" href="#cv" title="Scarica CV">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#93c5fd" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m16 11-4 4-4-4"/><path d="M20 21H4"/></svg>
+            Scarica CV
+          </a>
+          <a class="btn" href="https://www.linkedin.com/in/stefano-innocenti-842027276" target="_blank" rel="noreferrer">
+            <!-- LinkedIn -->
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="#7dd3fc" aria-hidden="true"><path d="M4.98 3.5C4.98 4.88 3.86 6 2.5 6S0 4.88 0 3.5 1.12 1 2.5 1s2.48 1.12 2.48 2.5zM0 8h5v16H0zM8 8h4.8v2.2h.07c.67-1.27 2.3-2.6 4.73-2.6 5.06 0 6 3.33 6 7.66V24h-5v-7.3c0-1.74-.03-3.98-2.42-3.98-2.42 0-2.79 1.89-2.79 3.85V24H8z"/></svg>
+            LinkedIn
+          </a>
+        </div>
+        <div style="margin-top:10px">
+          <span class="chip">Italiano · Madrelingua</span>
+          <span class="chip">Inglese · C1</span>
+          <span class="chip">Spagnolo · A2</span>
+        </div>
+      </div>
+      <div class="card ring">
+        <h3>In breve</h3>
+        <div class="divider"></div>
+        <div class="grid cols-2">
+          <div>
+            <strong>Telefono</strong>
+            <div style="color:#cbd5e1">+39 338 591 91 55</div>
+          </div>
+          <div>
+            <strong>Email</strong>
+            <div><a href="mailto:stefano.innocenti@mail.polimi.it" style="color:#cdeafe">stefano.innocenti@mail.polimi.it</a></div>
+          </div>
+          <div>
+            <strong>Data di nascita</strong>
+            <div style="color:#cbd5e1">4 ottobre 2002</div>
+          </div>
+          <div>
+            <strong>Dove sono</strong>
+            <div style="color:#cbd5e1">Milano (attuale) · Montecatini‑Terme (residenza)</div>
+          </div>
+        </div>
+        <div style="margin-top:10px">
+          <span class="chip">CAD: Inventor · SolidWorks · Solid Edge</span>
+          <span class="chip">C · MATLAB · HTML/CSS · LaTeX</span>
+          <span class="chip">Excel · Windows (avanzato)</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="profilo" class="card ring">
+      <h2>Profilo</h2>
+      <p>
+        Sono uno studente di Ingegneria Meccanica (indirizzo automotive) al Politecnico di Milano. Mi interessano la modellazione 3D, il disegno tecnico,
+        la prototipazione e la validazione funzionale, l'analisi di dati sperimentali e le logiche di assemblaggio. Nel lavoro di gruppo porto spirito d'iniziativa,
+        attenzione ai dettagli e capacità di problem solving.
+      </p>
+      <div style="margin-top:8px">
+        <span class="chip">Critical thinking</span>
+        <span class="chip">Teamwork</span>
+        <span class="chip">Troubleshooting</span>
+        <span class="chip">Initiative</span>
+        <span class="chip">Attention to detail</span>
+      </div>
+    </section>
+
+    <section id="progetti" class="card ring">
+      <h2>Progetti accademici</h2>
+      <article class="card ring" style="margin-top:10px">
+        <h3>Report – Theory and Technique of Ground Vehicles <small style="color:#a3b2d4">(Mar → Giu 2025)</small></h3>
+        <ul>
+          <li>Progetto del rapporto di trasmissione e verifica prestazionale</li>
+          <li>Simulazione ciclo WLTP con analisi consumi energia/carburante</li>
+          <li>Ottimizzazione impianto frenante: ripartizione idraulica, ABS, brake‑by‑wire, rigenerativa</li>
+          <li>Modellazione pneumatici e interpretazione diagrammi di handling (Magic Formula)</li>
+          <li>Analisi di sensitività su massa, aerodinamica e resistenza al rotolamento</li>
+        </ul>
+      </article>
+    </section>
+
+    <section id="competenze" class="card ring">
+      <h2>Competenze</h2>
+      <div class="grid cols-3">
+        <div class="card ring">
+          <h3>Hard skills</h3>
+          <ul>
+            <li>CAD: Inventor, SolidWorks, Solid Edge</li>
+            <li>Programmazione: C, MATLAB · Markup: HTML/CSS, LaTeX</li>
+            <li>Strumenti: Excel, Windows (utente avanzato)</li>
+          </ul>
+        </div>
+        <div class="card ring">
+          <h3>Lingue</h3>
+          <ul>
+            <li>Italiano – Madrelingua</li>
+            <li>Inglese – C1 (Advanced)</li>
+            <li>Spagnolo – A2 (Base)</li>
+          </ul>
+        </div>
+        <div class="card ring">
+          <h3>Hobby</h3>
+          <ul>
+            <li>Elettronica e sistemi di trasmissione (attività radioamatoriali non licenziate)</li>
+            <li>Running e fitness</li>
+            <li>Viaggi e scambi culturali</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="formazione" class="card ring">
+      <h2>Formazione</h2>
+      <div class="grid cols-2">
+        <div class="card ring">
+          <h3>Politecnico di Milano <small style="color:#a3b2d4">(Set 2021 – in corso)</small></h3>
+          <p>Laurea di I livello in Ingegneria Meccanica – indirizzo automotive. Corsi rilevanti: Disegno Tecnico e CAD, Costruzione di Macchine, Dinamica del Veicolo, Tecnologie di Produzione, Motori a Combustione Interna, Misure Meccaniche, Fluidodinamica, Termodinamica, Prova Materiali, Sistemi di Propulsione Veicolo.</p>
+        </div>
+        <div class="card ring">
+          <h3>Istituto Lorenzini, Pescia <small style="color:#a3b2d4">(2016 – 2021)</small></h3>
+          <p>Liceo Scientifico – Scienze Applicate. Voto finale <strong>87/100</strong>.</p>
+        </div>
+        <div class="card ring">
+          <h3>Study Abroad – Brighton, UK</h3>
+          <p>Quattro esperienze estive (tre settimane ciascuna) di immersione linguistica e scambio culturale: 2016, 2017, 2018, 2019.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="contatti" class="card ring">
+      <h2>Contatti</h2>
+      <div class="grid cols-3">
+        <a class="card ring btn" href="tel:+393385919155" style="justify-content:flex-start">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#93c5fd" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.66 12.66 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.66 12.66 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          +39 338 591 91 55
+        </a>
+        <a class="card ring btn" href="mailto:stefano.innocenti@mail.polimi.it" style="justify-content:flex-start">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#93c5fd" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v12H4z"/><path d="m22 6-10 7L2 6"/></svg>
+          stefano.innocenti@mail.polimi.it
+        </a>
+        <a class="card ring btn" href="https://www.linkedin.com/in/stefano-innocenti-842027276" target="_blank" rel="noreferrer" style="justify-content:flex-start">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="#7dd3fc"><path d="M4.98 3.5C4.98 4.88 3.86 6 2.5 6S0 4.88 0 3.5 1.12 1 2.5 1s2.48 1.12 2.48 2.5zM0 8h5v16H0zM8 8h4.8v2.2h.07c.67-1.27 2.3-2.6 4.73-2.6 5.06 0 6 3.33 6 7.66V24h-5v-7.3c0-1.74-.03-3.98-2.42-3.98-2.42 0-2.79 1.89-2.79 3.85V24H8z"/></svg>
+          LinkedIn
+        </a>
+      </div>
+
+      <div id="cv" class="divider"></div>
+      <p style="text-align:center; color:#a3b2d4">Vuoi il CV in PDF? Metti il file a fianco di questa pagina e rinominalo <code>cv.pdf</code> oppure cambia l'URL qui sotto.</p>
+      <p style="text-align:center"><a class="btn" id="cvBtn" href="cv.pdf" download>Scarica il PDF</a></p>
+    </section>
+  </main>
+
+  <footer>
+    <div class="divider"></div>
+    <small>© <span id="year"></span> Stefano Innocenti · Tutti i diritti riservati</small>
+  </footer>
+
+  <script>
+  // Lightweight rotating mesh background (WebGL2/1 with graceful fallback)
+  (function(){
+    const canvas = document.getElementById('bg');
+    let gl = canvas.getContext('webgl2', {antialias:true, alpha:true}) || canvas.getContext('webgl', {antialias:true, alpha:true}) || canvas.getContext('experimental-webgl');
+    const hasGL = !!gl;
+
+    function size(){
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const w = Math.floor(innerWidth * dpr), h = Math.floor(innerHeight * dpr);
+      if (canvas.width !== w || canvas.height !== h){ canvas.width = w; canvas.height = h; canvas.style.width='100%'; canvas.style.height='100%'; if (gl) gl.viewport(0,0,w,h); }
+    }
+    size(); addEventListener('resize', size);
+
+    if (!hasGL) return; // nice background gradients already set by CSS
+
+    // Minimal math
+    function mat4_perspective(fovy, aspect, near, far){ const f=1/Math.tan(fovy/2), nf=1/(near-far); const m=new Float32Array(16); m[0]=f/aspect; m[5]=f; m[10]=(far+near)*nf; m[11]=-1; m[14]=2*far*near*nf; return m; }
+    function mat4_identity(){ const m=new Float32Array(16); m[0]=m[5]=m[10]=m[15]=1; return m; }
+    function mat4_multiply(a,b){ const o=new Float32Array(16); for(let i=0;i<4;i++) for(let j=0;j<4;j++){ o[i*4+j]=a[i*4+0]*b[0*4+j]+a[i*4+1]*b[1*4+j]+a[i*4+2]*b[2*4+j]+a[i*4+3]*b[3*4+j]; } return o; }
+    function mat4_rotateY(m, r){ const c=Math.cos(r), s=Math.sin(r); const R=new Float32Array([c,0,-s,0, 0,1,0,0, s,0,c,0, 0,0,0,1]); return mat4_multiply(m,R); }
+    function mat4_translate(m, v){ const t=mat4_identity(); t[12]=v[0]; t[13]=v[1]; t[14]=v[2]; return mat4_multiply(m,t); }
+
+    // Shaders
+    const gl2 = gl.getParameter(gl.VERSION).includes('WebGL 2');
+    const VS = gl2 ? `#version 300 es\nprecision highp float; layout(location=0) in vec3 aPosition; uniform mat4 uProj,uView,uModel; void main(){ gl_Position=uProj*uView*uModel*vec4(aPosition,1.0); }` : `precision highp float; attribute vec3 aPosition; uniform mat4 uProj,uView,uModel; void main(){ gl_Position=uProj*uView*uModel*vec4(aPosition,1.0); }`;
+    const FS = gl2 ? `#version 300 es\nprecision highp float; out vec4 c; void main(){ c=vec4(0.55,0.85,1.0,0.85); }` : `precision mediump float; void main(){ gl_FragColor=vec4(0.55,0.85,1.0,0.85); }`;
+    function compile(t,src){ const s=gl.createShader(t); gl.shaderSource(s,src); gl.compileShader(s); if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){ console.warn(gl.getShaderInfoLog(s)); } return s; }
+    const prog = gl.createProgram(); gl.attachShader(prog, compile(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(prog);
+
+    // Sphere grid (lines)
+    const wSeg=80,hSeg=40,r=1.2; const positions=[];
+    function idx(x,y){return y*(wSeg+1)+x}
+    const verts=(wSeg+1)*(hSeg+1); const grid=new Array(verts);
+    for(let y=0;y<=hSeg;y++){ const v=y/hSeg, th=v*Math.PI, st=Math.sin(th), ct=Math.cos(th); for(let x=0;x<=wSeg;x++){ const u=x/wSeg, ph=u*Math.PI*2; const nx=Math.cos(ph)*st, ny=ct, nz=Math.sin(ph)*st; grid[idx(x,y)]=[r*nx,r*ny,r*nz]; }}
+    // Parallels
+    for(let y=0;y<=hSeg;y++){ for(let x=0;x<wSeg;x++){ const a=grid[idx(x,y)], b=grid[idx(x+1,y)]; positions.push(...a,...b); } }
+    // Meridians
+    for(let x=0;x<=wSeg;x++){ for(let y=0;y<hSeg;y++){ const a=grid[idx(x,y)], b=grid[idx(x,y+1)]; positions.push(...a,...b); } }
+    const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+
+    const aPos = gl2 ? 0 : gl.getAttribLocation(prog, 'aPosition');
+    gl.useProgram(prog); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.enableVertexAttribArray(aPos); gl.vertexAttribPointer(aPos,3,gl.FLOAT,false,0,0);
+
+    const uProj=gl.getUniformLocation(prog,'uProj'), uView=gl.getUniformLocation(prog,'uView'), uModel=gl.getUniformLocation(prog,'uModel');
+    let t0=performance.now();
+    function frame(now){ requestAnimationFrame(frame); size(); const aspect=canvas.width/canvas.height; const proj=mat4_perspective(55*Math.PI/180, aspect, .1, 50); const view=mat4_translate(mat4_identity(), [0,0,-3.5]); const rot=(now-t0)/4000; const model=mat4_rotateY(mat4_identity(), rot); gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT); gl.uniformMatrix4fv(uProj,false,proj); gl.uniformMatrix4fv(uView,false,view); gl.uniformMatrix4fv(uModel,false,model); gl.drawArrays(gl.LINES, 0, positions.length/3);
+    }
+    requestAnimationFrame(frame);
+  })();
+
+  // Smooth anchor scroll and dynamic year
+  (function(){
+    document.getElementById('year').textContent = new Date().getFullYear();
+    document.querySelectorAll('a[href^="#"]').forEach(a=>{
+      a.addEventListener('click', (e)=>{
+        const id = a.getAttribute('href').slice(1);
+        const el = document.getElementById(id);
+        if(!el) return;
+        e.preventDefault();
+        window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 14, behavior:'smooth' });
+      });
+    });
+  })();
+  </script>
+</body>
+</html>
