@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>2D N-Body Gravity (single canvas, permanent trails)</title>
+<style>
+  html, body {
+    height: 100%;
+    margin: 0;               /* remove default margins */
+    background: #000;        /* page background (safety) */
+    overflow: hidden;
+  }
+  canvas {
+    display: block;
+    width: 100vw;            /* fill the viewport */
+    height: 100vh;
+    background: #000;        /* black canvas background */
+    cursor: crosshair;
+  }
+</style>
+</head>
+<body>
+<canvas id="sim"></canvas>
+
+<script>
+(() => {
+  const canvas = document.getElementById('sim');
+  const ctx = canvas.getContext('2d', { alpha: true });
+
+  // Offscreen buffer for PERMANENT trails (not added to DOM, so we still have a single <canvas>)
+  const trailsCanvas = document.createElement('canvas');
+  const trailsCtx = trailsCanvas.getContext('2d', { alpha: true });
+
+  // Resize both canvases to fill viewport (we keep trails on resize by redrawing; here we reset)
+  function resize() {
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+    trailsCanvas.width  = canvas.width;
+    trailsCanvas.height = canvas.height;
+
+    // Fill both with black to start clean
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    trailsCtx.fillStyle = '#000';
+    trailsCtx.fillRect(0, 0, trailsCanvas.width, trailsCanvas.height);
+  }
+  window.addEventListener('resize', resize, { passive: true });
+  resize();
+
+  // ---------- Simulation setup ----------
+  const N = 20;                     // total bodies (including the sun)
+  const G = 500;                    // gravitational constant (tuned for pixels/s^2)
+  const softening = 3;              // to avoid singularities at very small distances
+  const bodies = [];
+
+  // Utility
+  const rand = (min, max) => min + Math.random() * (max - min);
+
+  // Colors
+  function massToColor(m) {
+    // Map mass to hue; heavier -> warmer
+    const hue = 200 - Math.min(180, (m - 2) * 12); // from blue(200) to red(20)
+    return `hsl(${hue}, 80%, 60%)`;
+  }
+
+  // Create central heavy "sun"
+  const cx = canvas.width * 0.5;
+  const cy = canvas.height * 0.5;
+  const sun = {
+    x: cx,
+    y: cy,
+    vx: 0,
+    vy: 0,
+    m: 1000,                 // much larger mass
+    r: 10,                   // visible radius
+    color: '#ffd54a',
+    isSun: true,
+    px: cx, py: cy           // previous position for trail
+  };
+  bodies.push(sun);
+
+  // Create the remaining bodies around the sun
+  const maxR = Math.min(canvas.width, canvas.height) * 0.48;
+  for (let i = 1; i < N; i++) {
+    const angle = rand(0, Math.PI * 2);
+    const radius = rand(60, maxR);
+    const x = cx + Math.cos(angle) * radius;
+    const y = cy + Math.sin(angle) * radius;
+
+    // Small random initial velocity (px/s)
+    const vx = rand(-30, 30);
+    const vy = rand(-30, 30);
+
+    // Different masses
+    const m = rand(2, 20);
+    const r = Math.max(2, Math.cbrt(m)); // radius scaled with mass
+
+    bodies.push({
+      x, y, vx, vy, m, r,
+      color: massToColor(m),
+      isSun: false,
+      px: x, py: y
+    });
+  }
+
+  // Draw a line segment on the trails canvas (permanent)
+  function strokeTrail(fromX, fromY, toX, toY, color, width=1) {
+    trailsCtx.beginPath();
+    trailsCtx.moveTo(fromX, fromY);
+    trailsCtx.lineTo(toX, toY);
+    trailsCtx.lineWidth = width;
+    trailsCtx.strokeStyle = color;
+    trailsCtx.stroke();
+  }
+
+  // Optional: reset trails with the 'r' key
+  window.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() === 'r') {
+      trailsCtx.fillStyle = '#000';
+      trailsCtx.fillRect(0, 0, trailsCanvas.width, trailsCanvas.height);
+    }
+  });
+
+  // ---------- Simulation loop ----------
+  let last = performance.now();
+  function step(now) {
+    const elapsed = (now - last) / 1000;             // seconds
+    last = now;
+    const dt = Math.min(0.033, Math.max(0.008, elapsed)); // clamp dt for stability
+
+    // Compute accelerations (O(N^2))
+    const ax = new Array(N).fill(0);
+    const ay = new Array(N).fill(0);
+
+    for (let i = 0; i < N; i++) {
+      for (let j = i + 1; j < N; j++) {
+        const bi = bodies[i];
+        const bj = bodies[j];
+
+        const dx = bj.x - bi.x;
+        const dy = bj.y - bi.y;
+        const dist2 = dx*dx + dy*dy + softening*softening;
+        const invDist = 1 / Math.sqrt(dist2);
+        const invDist3 = invDist * invDist * invDist;
+
+        const f = G * invDist3;
+        // Acceleration on i due to j: a_i += (f * m_j) * (r_ij)
+        ax[i] += dx * f * bj.m;
+        ay[i] += dy * f * bj.m;
+        // Acceleration on j due to i: a_j -= (f * m_i) * (r_ij)
+        ax[j] -= dx * f * bi.m;
+        ay[j] -= dy * f * bi.m;
+      }
+    }
+
+    // Integrate (semi-implicit Euler). Keep sun fixed in place.
+    for (let i = 0; i < N; i++) {
+      const b = bodies[i];
+
+      // Store previous position for trail segment
+      const prevX = b.x, prevY = b.y;
+
+      if (!b.isSun) {
+        b.vx += ax[i] * dt;
+        b.vy += ay[i] * dt;
+        b.x  += b.vx * dt;
+        b.y  += b.vy * dt;
+      }
+
+      // Draw the *permanent* trail between previous and current position
+      // Slightly thinner for light bodies, thicker for heavy ones
+      const w = Math.max(0.6, Math.min(2.2, 0.5 + 0.05 * b.r));
+      strokeTrail(prevX, prevY, b.x, b.y, b.color, w);
+
+      // Save prev for next frame
+      b.px = prevX; b.py = prevY;
+    }
+
+    // ---------- Rendering ----------
+    // Clear the visible canvas and redraw trails + current bodies
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // First, paint the black background to ensure opaque visuals
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Then composite the permanent trails buffer
+    ctx.drawImage(trailsCanvas, 0, 0);
+
+    // Draw bodies on top (clean, with no smearing)
+    for (const b of bodies) {
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+      ctx.fillStyle = b.color;
+      ctx.fill();
+
+      // subtle outline
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+      ctx.stroke();
+    }
+
+    requestAnimationFrame(step);
+  }
+
+  requestAnimationFrame(step);
+
+  // Initial hint (brief, fades naturally as trails cover it)
+  (function drawHint() {
+    ctx.save();
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = '12px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+    ctx.fillText('N-Body gravity — 20 bodies. Press R to clear trails.', 12, 20);
+    ctx.restore();
+  })();
+})();
+</script>
+</body>
+</html>
