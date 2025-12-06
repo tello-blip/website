@@ -1,220 +1,211 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="it">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>2D N-Body Gravity (single canvas, permanent trails)</title>
-<style>
-  html, body {
-    height: 100%;
-    margin: 0;               /* remove default margins */
-    background: #000;        /* page background (safety) */
-    overflow: hidden;
-  }
-  canvas {
-    display: block;
-    width: 100vw;            /* fill the viewport */
-    height: 100vh;
-    background: #000;        /* black canvas background */
-    cursor: crosshair;
-  }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PoliSpace GS | Operational</title>
+    
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.112/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.112/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/satellite.js/5.0.0/satellite.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Share Tech Mono', monospace; color: white; }
+        #cesiumContainer { width: 100%; height: 100vh; }
+        
+        /* HUD */
+        .hud {
+            position: absolute; top: 10px; left: 10px;
+            padding: 10px; background: rgba(0, 0, 0, 0.8);
+            border: 1px solid #00d4ff; z-index: 100;
+        }
+        .hud-title { color: #00d4ff; margin: 0 0 5px 0; font-size: 16px; border-bottom: 1px solid #333; }
+        .log { font-size: 11px; color: #aaa; max-height: 100px; overflow-y: auto; }
+        .ok { color: #0f0; } .err { color: #f00; }
+    </style>
 </head>
 <body>
-<canvas id="sim"></canvas>
 
-<script>
-(() => {
-  const canvas = document.getElementById('sim');
-  const ctx = canvas.getContext('2d', { alpha: true });
+    <div class="hud">
+        <h3 class="hud-title">GS STATUS</h3>
+        <div class="log" id="sys-log"></div>
+    </div>
 
-  // Offscreen buffer for PERMANENT trails (not added to DOM, so we still have a single <canvas>)
-  const trailsCanvas = document.createElement('canvas');
-  const trailsCtx = trailsCanvas.getContext('2d', { alpha: true });
+    <div id="cesiumContainer"></div>
 
-  // Resize both canvases to fill viewport (we keep trails on resize by redrawing; here we reset)
-  function resize() {
-    canvas.width  = window.innerWidth;
-    canvas.height = window.innerHeight;
-    trailsCanvas.width  = canvas.width;
-    trailsCanvas.height = canvas.height;
+    <script>
+        function sysLog(msg, type='') {
+            const el = document.getElementById('sys-log');
+            const color = type === 'err' ? '#f00' : (type === 'ok' ? '#0f0' : '#ccc');
+            el.innerHTML = `<div style="color:${color}">> ${msg}</div>` + el.innerHTML;
+        }
 
-    // Fill both with black to start clean
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    trailsCtx.fillStyle = '#000';
-    trailsCtx.fillRect(0, 0, trailsCanvas.width, trailsCanvas.height);
-  }
-  window.addEventListener('resize', resize, { passive: true });
-  resize();
+        // 1. INIZIALIZZAZIONE SICURA DEL VIEWER
+        // Disabilitiamo l'imageryProvider automatico per evitare conflitti
+        const viewer = new Cesium.Viewer('cesiumContainer', {
+            imageryProvider: false, // Partiamo con globo vuoto (blu/nero)
+            baseLayerPicker: false, geocoder: false, homeButton: false, infoBox: false,
+            sceneModePicker: false, selectionIndicator: true, timeline: false, animation: false,
+            navigationHelpButton: false, shouldAnimate: true,
+            contextOptions: { webgl: { alpha: true } }
+        });
 
-  // ---------- Simulation setup ----------
-  const N = 20;                     // total bodies (including the sun)
-  const G = 500;                    // gravitational constant (tuned for pixels/s^2)
-  const softening = 3;              // to avoid singularities at very small distances
-  const bodies = [];
+        // Configurazione Ambiente (Nero Spaziale)
+        viewer.scene.skyBox.show = false;
+        viewer.scene.backgroundColor = Cesium.Color.BLACK;
+        viewer.scene.sun.show = false; // Nascondiamo il sole per illuminazione uniforme
+        viewer.scene.globe.baseColor = Cesium.Color.BLACK;
+        viewer.cesiumWidget.creditContainer.style.display = "none";
 
-  // Utility
-  const rand = (min, max) => min + Math.random() * (max - min);
+        // 2. CARICAMENTO MANUALE MAPPA (FIX "UNDEFINED")
+        try {
+            // Creiamo il provider
+            const osmProvider = new Cesium.OpenStreetMapImageryProvider({
+                url : 'https://a.tile.openstreetmap.org/'
+            });
+            
+            // Aggiungiamo il layer e salviamo il riferimento
+            const layer = viewer.imageryLayers.addImageryProvider(osmProvider);
+            
+            // ORA possiamo modificarlo perché 'layer' è la variabile che abbiamo appena creato
+            layer.alpha = 1.0;
+            layer.saturation = 0;       // Bianco e nero
+            layer.brightness = 0.3;     // Molto scuro
+            layer.contrast = 2.5;       // Alto contrasto per i confini
 
-  // Colors
-  function massToColor(m) {
-    // Map mass to hue; heavier -> warmer
-    const hue = 200 - Math.min(180, (m - 2) * 12); // from blue(200) to red(20)
-    return `hsl(${hue}, 80%, 60%)`;
-  }
+            sysLog("Map Layer loaded & styled.", "ok");
+        } catch (e) {
+            sysLog("Map Error: " + e.message, "err");
+        }
 
-  // Create central heavy "sun"
-  const cx = canvas.width * 0.5;
-  const cy = canvas.height * 0.5;
-  const sun = {
-    x: cx,
-    y: cy,
-    vx: 0,
-    vy: 0,
-    m: 1000,                 // much larger mass
-    r: 10,                   // visible radius
-    color: '#ffd54a',
-    isSun: true,
-    px: cx, py: cy           // previous position for trail
-  };
-  bodies.push(sun);
+        // Posizione Iniziale
+        viewer.camera.setView({
+            destination: Cesium.Cartesian3.fromDegrees(12, 42, 10000000),
+            orientation: { heading: 0.0, pitch: -1.57, roll: 0.0 }
+        });
 
-  // Create the remaining bodies around the sun
-  const maxR = Math.min(canvas.width, canvas.height) * 0.48;
-  for (let i = 1; i < N; i++) {
-    const angle = rand(0, Math.PI * 2);
-    const radius = rand(60, maxR);
-    const x = cx + Math.cos(angle) * radius;
-    const y = cy + Math.sin(angle) * radius;
+        // GS Milano Marker
+        viewer.entities.add({
+            position: Cesium.Cartesian3.fromDegrees(9.2, 45.5),
+            point: { pixelSize: 8, color: Cesium.Color.RED },
+            label: { text: "GS MILANO", font: "12px Monospace", pixelOffset: new Cesium.Cartesian2(0, -20) }
+        });
 
-    // Small random initial velocity (px/s)
-    const vx = rand(-30, 30);
-    const vy = rand(-30, 30);
+        // 3. TRACKING ORBITALE (Versione Stabile)
+        const BACKUP_TLE = [
+            { name: "ISS", l1: "1 25544U 98067A   24156.54672672  .00016503  00000+0  29765-3 0  9993", l2: "2 25544  51.6396 156.6874 0004739 233.8038 232.0673 15.49886026456636"},
+            { name: "TIANGONG", l1: "1 48274U 21035A   24156.49503463  .00021308  00000+0  19198-3 0  9996", l2: "2 48274  41.4729 270.8351 0006764 250.6401 247.9628 15.60275811169094"},
+            { name: "HUBBLE", l1: "1 20580U 90037B   24156.36884021  .00001888  00000+0  67586-4 0  9997", l2: "2 20580  28.4695 249.2078 0003025 258.9745 220.3013 15.09241416624966"}
+        ];
 
-    // Different masses
-    const m = rand(2, 20);
-    const r = Math.max(2, Math.cbrt(m)); // radius scaled with mass
+        async function initSatellites() {
+            sysLog("Fetching Orbital Data...", "info");
+            try {
+                // Proxy per evitare blocchi
+                const url = 'https://corsproxy.io/?' + encodeURIComponent('https://celestrak.org/NORAD/elements/gp.php?GROUP=visual&FORMAT=tle');
+                const resp = await fetch(url);
+                if(!resp.ok) throw new Error("Network KO");
+                const text = await resp.text();
+                processData(text.split('\n'));
+                sysLog("Live Data Loaded.", "ok");
+            } catch (e) {
+                sysLog("Live Data Fail. Using Backup.", "err");
+                let dummy = [];
+                BACKUP_TLE.forEach(s => { dummy.push(s.name, s.l1, s.l2); });
+                processData(dummy);
+            }
+        }
 
-    bodies.push({
-      x, y, vx, vy, m, r,
-      color: massToColor(m),
-      isSun: false,
-      px: x, py: y
+        function processData(lines) {
+            const start = Cesium.JulianDate.now();
+            const stop = Cesium.JulianDate.addSeconds(start, 5400, new Cesium.JulianDate()); // +90 min
+
+            // Setup Orologio
+            viewer.clock.startTime = start.clone();
+            viewer.clock.stopTime = stop.clone();
+            viewer.clock.currentTime = start.clone();
+            viewer.clock.multiplier = 10;
+            viewer.clock.clockRange = Cesium.ClockRange.LOOP_STOP;
+
+            let count = 0;
+            for(let i=0; i<lines.length; i++) {
+                if(lines[i].startsWith('1 ') && lines[i+1]?.startsWith('2 ')) {
+                    const name = lines[i-1]?.trim() || "SAT";
+                    try {
+                        addSatellite(name, lines[i], lines[i+1], start, stop);
+                        count++;
+                    } catch(e) {}
+                }
+            }
+            sysLog("Tracking " + count + " objects.", "ok");
+        }
+
+
+function addSatellite(name, l1, l2, start, stop) {
+    const satrec = satellite.twoline2satrec(l1, l2);
+    const positions = new Cesium.SampledPositionProperty();
+    
+    // Campionamento posizione (uguale a prima)
+    const totalSec = Cesium.JulianDate.secondsDifference(stop, start);
+    for(let t=0; t<=totalSec; t+=60) {
+        const time = Cesium.JulianDate.addSeconds(start, t, new Cesium.JulianDate());
+        const jsDate = Cesium.JulianDate.toDate(time);
+        
+        const pv = satellite.propagate(satrec, jsDate);
+        const gmst = satellite.gstime(jsDate);
+        
+        if(pv.position && gmst) {
+            const gd = satellite.eciToGeodetic(pv.position, gmst);
+            const cart = Cesium.Cartesian3.fromRadians(gd.longitude, gd.latitude, gd.height*1000);
+            positions.addSample(time, cart);
+        }
+    }
+
+    // CALCOLO ORIENTAMENTO (Novità!)
+    // Fa sì che il satellite "guardi" avanti nella direzione in cui viaggia
+    const orientation = new Cesium.VelocityOrientationProperty(positions);
+
+    viewer.entities.add({
+        name: name,
+        position: positions,
+        orientation: orientation, // Applica la rotazione fisica
+        
+        // MODELLO 3D (Invece del punto)
+        model: {
+            uri: 'satellite.glb', // Assicurati che questo file sia nella cartella!
+            minimumPixelSize: 64, // Dimensione minima visibile
+            maximumScale: 20000,  // Scala massima per non diventare enorme allo zoom
+            runAnimations: true,  // Se il modello ha pannelli solari che si aprono
+            shadows: Cesium.ShadowMode.ENABLED
+        },
+
+        // Scia Orbitale (Restata uguale, dà l'effetto velocità)
+        path: {
+            resolution: 1,
+            width: 2,
+            material: new Cesium.PolylineGlowMaterialProperty({
+                glowPower: 0.2,
+                color: Cesium.Color.CYAN
+            }),
+            leadTime: 0,
+            trailTime: 5400 // Scia di 90 minuti
+        },
+        
+        // Etichetta (Si vede solo quando ti avvicini)
+        label: { 
+            text: name, 
+            font: "12px Share Tech Mono", 
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            outlineWidth: 2,
+            verticalOrigin: Cesium.VerticalOrigin.TOP,
+            pixelOffset: new Cesium.Cartesian2(0, 32), // Spostata sotto il modello
+            distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 2000000)
+        }
     });
-  }
+}
+        setTimeout(initSatellites, 1000); // Avvio ritardato sicuro
 
-  // Draw a line segment on the trails canvas (permanent)
-  function strokeTrail(fromX, fromY, toX, toY, color, width=1) {
-    trailsCtx.beginPath();
-    trailsCtx.moveTo(fromX, fromY);
-    trailsCtx.lineTo(toX, toY);
-    trailsCtx.lineWidth = width;
-    trailsCtx.strokeStyle = color;
-    trailsCtx.stroke();
-  }
-
-  // Optional: reset trails with the 'r' key
-  window.addEventListener('keydown', (e) => {
-    if (e.key.toLowerCase() === 'r') {
-      trailsCtx.fillStyle = '#000';
-      trailsCtx.fillRect(0, 0, trailsCanvas.width, trailsCanvas.height);
-    }
-  });
-
-  // ---------- Simulation loop ----------
-  let last = performance.now();
-  function step(now) {
-    const elapsed = (now - last) / 1000;             // seconds
-    last = now;
-    const dt = Math.min(0.033, Math.max(0.008, elapsed)); // clamp dt for stability
-
-    // Compute accelerations (O(N^2))
-    const ax = new Array(N).fill(0);
-    const ay = new Array(N).fill(0);
-
-    for (let i = 0; i < N; i++) {
-      for (let j = i + 1; j < N; j++) {
-        const bi = bodies[i];
-        const bj = bodies[j];
-
-        const dx = bj.x - bi.x;
-        const dy = bj.y - bi.y;
-        const dist2 = dx*dx + dy*dy + softening*softening;
-        const invDist = 1 / Math.sqrt(dist2);
-        const invDist3 = invDist * invDist * invDist;
-
-        const f = G * invDist3;
-        // Acceleration on i due to j: a_i += (f * m_j) * (r_ij)
-        ax[i] += dx * f * bj.m;
-        ay[i] += dy * f * bj.m;
-        // Acceleration on j due to i: a_j -= (f * m_i) * (r_ij)
-        ax[j] -= dx * f * bi.m;
-        ay[j] -= dy * f * bi.m;
-      }
-    }
-
-    // Integrate (semi-implicit Euler). Keep sun fixed in place.
-    for (let i = 0; i < N; i++) {
-      const b = bodies[i];
-
-      // Store previous position for trail segment
-      const prevX = b.x, prevY = b.y;
-
-      if (!b.isSun) {
-        b.vx += ax[i] * dt;
-        b.vy += ay[i] * dt;
-        b.x  += b.vx * dt;
-        b.y  += b.vy * dt;
-      }
-
-      // Draw the *permanent* trail between previous and current position
-      // Slightly thinner for light bodies, thicker for heavy ones
-      const w = Math.max(0.6, Math.min(2.2, 0.5 + 0.05 * b.r));
-      strokeTrail(prevX, prevY, b.x, b.y, b.color, w);
-
-      // Save prev for next frame
-      b.px = prevX; b.py = prevY;
-    }
-
-    // ---------- Rendering ----------
-    // Clear the visible canvas and redraw trails + current bodies
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // First, paint the black background to ensure opaque visuals
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Then composite the permanent trails buffer
-    ctx.drawImage(trailsCanvas, 0, 0);
-
-    // Draw bodies on top (clean, with no smearing)
-    for (const b of bodies) {
-      ctx.beginPath();
-      ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-      ctx.fillStyle = b.color;
-      ctx.fill();
-
-      // subtle outline
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-      ctx.stroke();
-    }
-
-    requestAnimationFrame(step);
-  }
-
-  requestAnimationFrame(step);
-
-  // Initial hint (brief, fades naturally as trails cover it)
-  (function drawHint() {
-    ctx.save();
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.font = '12px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
-    ctx.fillText('N-Body gravity — 20 bodies. Press R to clear trails.', 12, 20);
-    ctx.restore();
-  })();
-})();
-</script>
+    </script>
 </body>
 </html>
