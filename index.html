@@ -149,7 +149,7 @@ function addSatellite(name, l1, l2, start, stop) {
     // --- 1. IMPOSTAZIONI DI CORREZIONE (GIOCA CON QUESTI NUMERI) ---
     // Se il satellite vola storto, cambia questi valori (in gradi: 0, 90, 180, -90...)
     const CORREZIONE_HEADING = 0;   // Destra / Sinistra
-    const CORREZIONE_PITCH   = -90; // Naso Su / Giù (Spesso è -90 o 90)
+    const CORREZIONE_PITCH   = 0; // Naso Su / Giù (Spesso è -90 o 90)
     const CORREZIONE_ROLL    = 0;   // Avvitamento (Ali verticali o orizzontali)
 
     // Creiamo il quaternione di correzione fissa
@@ -230,4 +230,5 @@ function addSatellite(name, l1, l2, start, stop) {
 
     </script>
 </body>
+
 </html>
