@@ -146,7 +146,22 @@ function addSatellite(name, l1, l2, start, stop) {
     const satrec = satellite.twoline2satrec(l1, l2);
     const positions = new Cesium.SampledPositionProperty();
     
-    // Campionamento posizione (uguale a prima)
+    // --- 1. IMPOSTAZIONI DI CORREZIONE (GIOCA CON QUESTI NUMERI) ---
+    // Se il satellite vola storto, cambia questi valori (in gradi: 0, 90, 180, -90...)
+    const CORREZIONE_HEADING = 0;   // Destra / Sinistra
+    const CORREZIONE_PITCH   = -90; // Naso Su / Giù (Spesso è -90 o 90)
+    const CORREZIONE_ROLL    = 0;   // Avvitamento (Ali verticali o orizzontali)
+
+    // Creiamo il quaternione di correzione fissa
+    const fixedCorrection = Cesium.Quaternion.fromHeadingPitchRoll(
+        new Cesium.HeadingPitchRoll(
+            Cesium.Math.toRadians(CORREZIONE_HEADING),
+            Cesium.Math.toRadians(CORREZIONE_PITCH),
+            Cesium.Math.toRadians(CORREZIONE_ROLL)
+        )
+    );
+
+    // --- 2. CALCOLO ORBITA (Standard) ---
     const totalSec = Cesium.JulianDate.secondsDifference(stop, start);
     for(let t=0; t<=totalSec; t+=60) {
         const time = Cesium.JulianDate.addSeconds(start, t, new Cesium.JulianDate());
@@ -162,45 +177,52 @@ function addSatellite(name, l1, l2, start, stop) {
         }
     }
 
-    // CALCOLO ORIENTAMENTO (Novità!)
-    // Fa sì che il satellite "guardi" avanti nella direzione in cui viaggia
-    const orientation = new Cesium.VelocityOrientationProperty(positions);
+    // --- 3. LOGICA DI ORIENTAMENTO AVANZATA ---
+    // Calcola la direzione di volo automatica
+    const velocityOrientation = new Cesium.VelocityOrientationProperty(positions);
+    
+    // Unisce la direzione di volo + la tua correzione manuale
+    const finalOrientation = new Cesium.CallbackProperty((time, result) => {
+        // Ottieni l'orientamento basato sulla velocità
+        const ori = velocityOrientation.getValue(time, result);
+        if (!ori) return undefined;
+        
+        // Moltiplica per la correzione (applica la rotazione)
+        return Cesium.Quaternion.multiply(ori, fixedCorrection, result || new Cesium.Quaternion());
+    }, false);
 
+
+    // --- 4. AGGIUNTA ENTITÀ ---
     viewer.entities.add({
         name: name,
         position: positions,
-        orientation: orientation, // Applica la rotazione fisica
+        orientation: finalOrientation, // Usiamo l'orientamento corretto
         
-        // MODELLO 3D (Invece del punto)
         model: {
-            uri: 'satellite.glb', // Assicurati che questo file sia nella cartella!
-            minimumPixelSize: 64, // Dimensione minima visibile
-            maximumScale: 20000,  // Scala massima per non diventare enorme allo zoom
-            runAnimations: true,  // Se il modello ha pannelli solari che si aprono
-            shadows: Cesium.ShadowMode.ENABLED
+            uri: 'satellite.glb', // Assicurati che il nome sia giusto!
+            minimumPixelSize: 64,
+            maximumScale: 20000,
+            runAnimations: true
         },
 
-        // Scia Orbitale (Restata uguale, dà l'effetto velocità)
         path: {
             resolution: 1,
-            width: 2,
+            width: 1,
             material: new Cesium.PolylineGlowMaterialProperty({
                 glowPower: 0.2,
                 color: Cesium.Color.CYAN
             }),
             leadTime: 0,
-            trailTime: 5400 // Scia di 90 minuti
+            trailTime: 5400
         },
         
-        // Etichetta (Si vede solo quando ti avvicini)
         label: { 
             text: name, 
             font: "12px Share Tech Mono", 
             style: Cesium.LabelStyle.FILL_AND_OUTLINE,
             outlineWidth: 2,
-            verticalOrigin: Cesium.VerticalOrigin.TOP,
-            pixelOffset: new Cesium.Cartesian2(0, 32), // Spostata sotto il modello
-            distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 2000000)
+            pixelOffset: new Cesium.Cartesian2(0, 50),
+            distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 5000000)
         }
     });
 }
