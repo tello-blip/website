@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PoliSpace Ground Station | Mission Control</title>
+    <title>PoliSpace GS | Orbital Tracking</title>
     
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;500&family=Share+Tech+Mono&display=swap" rel="stylesheet">
     
@@ -14,8 +14,9 @@
     <style>
         :root {
             --bg-color: #0b0d17;
-            --panel-bg: rgba(21, 25, 43, 0.85); /* Leggermente trasparente */
-            --primary-color: #00d4ff; /* Ciano PoliSpace */
+            --panel-bg: rgba(15, 20, 35, 0.9);
+            --primary-color: #00d4ff;
+            --alert-color: #ff0055;
             --text-color: #e0e6ed;
             --dim-text: #8b9bb4;
             --border-color: rgba(0, 212, 255, 0.3);
@@ -37,26 +38,25 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 0.8rem 2rem;
+            padding: 0.5rem 1.5rem;
             border-bottom: 2px solid var(--border-color);
             background: rgba(11, 13, 23, 0.95);
             z-index: 10;
         }
 
-        .logo { font-size: 1.5rem; font-weight: 700; letter-spacing: 2px; color: var(--primary-color); text-transform: uppercase; }
+        .logo { font-size: 1.4rem; font-weight: 700; letter-spacing: 2px; color: var(--primary-color); text-transform: uppercase; }
         .status-badge {
             background: rgba(0, 255, 136, 0.1); color: #00ff88;
-            padding: 0.4rem 1rem; border: 1px solid #00ff88; border-radius: 4px;
+            padding: 0.3rem 0.8rem; border: 1px solid #00ff88; border-radius: 4px;
             font-family: 'Share Tech Mono', monospace; font-size: 0.8rem;
         }
 
-        /* MAIN GRID LAYOUT */
+        /* LAYOUT */
         .dashboard {
             display: grid;
-            grid-template-columns: 250px 1fr 250px; /* Colonna sinistra, Centro (Globo), Colonna destra */
-            grid-template-rows: 2fr 1fr; /* Sopra (Dati+Globo), Sotto (Log) */
-            gap: 1rem;
-            padding: 1rem;
+            grid-template-columns: 260px 1fr 260px;
+            gap: 10px;
+            padding: 10px;
             flex-grow: 1;
             height: 100%;
         }
@@ -65,148 +65,144 @@
         .panel {
             background-color: var(--panel-bg);
             border: 1px solid var(--border-color);
-            border-radius: 6px;
+            border-radius: 4px;
             padding: 1rem;
             display: flex;
             flex-direction: column;
             position: relative;
             backdrop-filter: blur(5px);
+            margin-bottom: 10px;
         }
 
         .panel-title {
-            font-size: 0.75rem; color: var(--dim-text); text-transform: uppercase;
+            font-size: 0.7rem; color: var(--dim-text); text-transform: uppercase;
             letter-spacing: 1px; margin-bottom: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.1);
             padding-bottom: 5px;
         }
 
         .data-value {
-            font-family: 'Share Tech Mono', monospace; font-size: 2.2rem; color: var(--primary-color);
-            text-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+            font-family: 'Share Tech Mono', monospace; font-size: 2rem; color: var(--primary-color);
+            text-shadow: 0 0 10px rgba(0, 212, 255, 0.2);
         }
-        .unit { font-size: 0.9rem; color: var(--dim-text); }
+        .unit { font-size: 0.8rem; color: var(--dim-text); margin-left: 5px; }
 
-        /* GLOBE CONTAINER (Il cuore del sistema) */
+        /* GLOBO */
         .main-view {
-            grid-column: 2; /* Sta al centro */
-            grid-row: 1 / span 2; /* Occupa tutta l'altezza centrale */
-            padding: 0; /* Niente padding per il globo */
-            border: 2px solid var(--primary-color);
+            grid-column: 2;
+            padding: 0;
+            border: 1px solid var(--primary-color);
             background: #000;
             overflow: hidden;
             position: relative;
         }
+        #cesiumContainer { width: 100%; height: 100%; }
 
-        #cesiumContainer { width: 100%; height: 100%; display: block; }
-
-        /* SIDEBARS */
-        .sidebar-left { grid-column: 1; display: flex; flex-direction: column; gap: 1rem; }
-        .sidebar-right { grid-column: 3; display: flex; flex-direction: column; gap: 1rem; }
-
-        /* LOG CONSOLE */
-        .log-panel {
-            grid-column: 1 / span 3; /* Occupa tutto in larghezza se volessimo metterlo sotto, ma qui lo mettiamo a destra in basso o fluttuante */
-            display: none; /* Lo gestiamo nelle sidebar per ora */
-        }
+        /* UI ELEMENTS */
+        .sidebar { display: flex; flex-direction: column; }
         
-        .console-box {
-            font-family: 'Share Tech Mono', monospace; font-size: 0.8rem; color: #00ff88;
-            overflow-y: auto; flex-grow: 1; height: 100px;
+        select.sat-selector {
+            width: 100%;
+            background: #000;
+            color: var(--primary-color);
+            border: 1px solid var(--primary-color);
+            padding: 10px;
+            font-family: 'Share Tech Mono';
+            font-size: 1rem;
+            margin-top: 5px;
+            cursor: pointer;
         }
-        .log-entry { margin-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .timestamp { color: #555; margin-right: 8px; }
+
+        .console-box {
+            font-family: 'Share Tech Mono', monospace; font-size: 0.75rem; color: #00ff88;
+            overflow-y: auto; height: 120px;
+            border-top: 1px solid #333; padding-top: 5px;
+        }
+        .log-entry { margin-bottom: 3px; border-bottom: 1px solid rgba(255,255,255,0.05); }
 
         /* Footer */
         footer {
-            text-align: center; padding: 5px; font-size: 0.7rem; color: var(--dim-text);
-            background: #000; border-top: 1px solid #222;
+            text-align: center; padding: 4px; font-size: 0.7rem; color: #555; background: #000;
         }
+
+        /* Highlights */
+        .highlight { color: #fff; font-weight: bold; }
     </style>
 </head>
 <body>
 
     <header>
         <div class="logo">PoliSpace <span style="color:white">GS</span></div>
-        <div class="status-badge">● SYSTEM ONLINE</div>
+        <div class="status-badge">● LIVE TRACKING</div>
     </header>
 
     <main class="dashboard">
-        <div class="sidebar-left">
+        <div class="sidebar">
             <div class="panel">
-                <div class="panel-title">Antenna Azimuth</div>
-                <div class="data-value" id="azimuth">180.0<span class="unit">°</span></div>
+                <div class="panel-title">Target Satellite</div>
+                <select id="sat-selector" class="sat-selector" onchange="changeSatellite()">
+                    <option value="">LOADING...</option>
+                </select>
+            </div>
+
+            <div class="panel">
+                <div class="panel-title">Azimuth (Look Angle)</div>
+                <div class="data-value" id="azimuth">--<span class="unit">DEG</span></div>
             </div>
             <div class="panel">
-                <div class="panel-title">Antenna Elevation</div>
-                <div class="data-value" id="elevation">45.0<span class="unit">°</span></div>
+                <div class="panel-title">Elevation</div>
+                <div class="data-value" id="elevation">--<span class="unit">DEG</span></div>
             </div>
-            <div class="panel" style="flex-grow: 1;">
-                <div class="panel-title">System Logs</div>
-                <div class="console-box" id="console">
-                    <div class="log-entry"><span class="timestamp">INIT</span>Dashboard Loaded.</div>
-                </div>
+             <div class="panel">
+                <div class="panel-title">Altitude</div>
+                <div class="data-value" id="altitude">--<span class="unit">KM</span></div>
             </div>
         </div>
 
         <div class="panel main-view">
             <div id="cesiumContainer"></div>
-            <div style="position: absolute; top: 10px; left: 10px; z-index: 99; background: rgba(0,0,0,0.7); padding: 5px; border-radius: 4px;">
-                 <span style="color:#00d4ff; font-family:'Share Tech Mono'; font-size: 12px;">LIVE VIEW: ORBITAL PLANE</span>
+            <div style="position: absolute; top: 10px; left: 10px; z-index: 99; background: rgba(0,0,0,0.6); padding: 5px 10px;">
+                 <span style="color:#00d4ff; font-family:'Share Tech Mono'; font-size: 12px;">ACTIVE: <span id="active-sat-label" class="highlight">NONE</span></span>
             </div>
         </div>
 
-        <div class="sidebar-right">
+        <div class="sidebar">
             <div class="panel">
                 <div class="panel-title">Downlink Freq</div>
-                <div class="data-value">437.45<span class="unit"> M</span></div>
+                <div class="data-value">437.45<span class="unit">MHz</span></div>
             </div>
             <div class="panel">
-                <div class="panel-title">Signal Noise (SNR)</div>
-                <div class="data-value" id="snr">12.4<span class="unit"> dB</span></div>
+                <div class="panel-title">Signal Quality (SNR)</div>
+                <div class="data-value" id="snr">--<span class="unit">dB</span></div>
             </div>
-            <div class="panel">
-                <div class="panel-title">Active Satellites</div>
-                <div class="data-value" id="sat-count-ui" style="font-size: 1.8rem;">--</div>
+            <div class="panel" style="flex-grow: 1;">
+                <div class="panel-title">Mission Log</div>
+                <div class="console-box" id="console"></div>
             </div>
         </div>
     </main>
 
-    <footer>
-        &copy; 2025 PoliSpace - Politecnico di Milano Student Association
-    </footer>
+    <footer>&copy; 2024 PoliSpace Ground Station Control</footer>
 
     <script>
-        // --- PARTE 1: LOGICA UI (Numeri che girano) ---
-        function updateTelemetry() {
-            // Simulazione Azimuth/Elevation
-            let az = parseFloat(document.getElementById('azimuth').innerText);
-            let newAz = az + (Math.random() - 0.4); 
-            if(newAz > 360) newAz = 0; if(newAz < 0) newAz = 360;
-            document.getElementById('azimuth').innerHTML = newAz.toFixed(1) + '<span class="unit">°</span>';
+        // --- CONFIGURAZIONE GROUND STATION (GS) MILANO ---
+        const GS_LAT = 45.47; 
+        const GS_LON = 9.22;
+        const GS_ALT = 0.120; // km
 
-            // Simulazione SNR
-            let snr = 10 + Math.random() * 8;
-            document.getElementById('snr').innerHTML = snr.toFixed(1) + '<span class="unit"> dB</span>';
+        // Variabili Globali
+        let viewer;
+        let satellitesCache = {}; // Mappa: Nome -> {satrec, entity}
+        let selectedSatellite = null; // Il satellite attualmente tracciato
+        let updateInterval;
+
+        function log(msg) {
+            const c = document.getElementById('console');
+            const t = new Date().toLocaleTimeString('it-IT',{hour12:false});
+            c.innerHTML = `<div class="log-entry"><span style="color:#666">[${t}]</span> ${msg}</div>` + c.innerHTML;
         }
 
-        function addLog(msg) {
-            const consoleDiv = document.getElementById('console');
-            const now = new Date();
-            const timeString = now.toLocaleTimeString('it-IT', {hour12:false});
-            
-            const newEntry = document.createElement('div');
-            newEntry.classList.add('log-entry');
-            newEntry.innerHTML = `<span class="timestamp">${timeString}</span>${msg}`;
-            consoleDiv.prepend(newEntry);
-            
-            // Tieni pulito
-            if(consoleDiv.children.length > 20) consoleDiv.lastChild.remove();
-        }
-        setInterval(updateTelemetry, 1000); // Aggiorna i numeri ogni secondo
-
-        // --- PARTE 2: CESIUM (Il Motore 3D) ---
-        
-        // Setup Viewer OSM (Stabile)
-        const viewer = new Cesium.Viewer('cesiumContainer', {
+        // --- 1. INIZIALIZZAZIONE CESIUM ---
+        viewer = new Cesium.Viewer('cesiumContainer', {
             imageryProvider: false, 
             baseLayerPicker: false, geocoder: false, homeButton: false, infoBox: false,
             sceneModePicker: false, selectionIndicator: true, timeline: false, animation: false,
@@ -214,89 +210,129 @@
             contextOptions: { webgl: { alpha: true } }
         });
 
-        // Styling Dark
+        // Configurazione Grafica (Dark Mode)
         viewer.scene.skyBox.show = false;
         viewer.scene.backgroundColor = Cesium.Color.BLACK;
         viewer.scene.globe.baseColor = Cesium.Color.BLACK;
         viewer.cesiumWidget.creditContainer.style.display = "none";
 
-        // Mappa OSM Scura
+        // Caricamento Mappa OSM Scura
         try {
             const osmProvider = new Cesium.OpenStreetMapImageryProvider({ url : 'https://a.tile.openstreetmap.org/' });
             const layer = viewer.imageryLayers.addImageryProvider(osmProvider);
-            layer.saturation = 0; layer.brightness = 0.3; layer.contrast = 2.5;
-            addLog("Map system loaded.");
-        } catch (e) { addLog("Map Error: " + e.message); }
+            layer.saturation = 0; layer.brightness = 0.3; layer.contrast = 3.0;
+        } catch(e) { console.log("Map Error", e); }
 
-        // Camera su Milano
+        // Marker GS
+        viewer.entities.add({
+            position: Cesium.Cartesian3.fromDegrees(GS_LON, GS_LAT),
+            point: { pixelSize: 10, color: Cesium.Color.RED, outlineColor: Cesium.Color.WHITE, outlineWidth: 2 },
+            label: { text: "GS MILANO", font: "12px Share Tech Mono", pixelOffset: new Cesium.Cartesian2(0, -20), fillColor: Cesium.Color.RED }
+        });
+
+        // Camera Iniziale
         viewer.camera.setView({
             destination: Cesium.Cartesian3.fromDegrees(10, 42, 13000000),
             orientation: { heading: 0.0, pitch: -1.57, roll: 0.0 }
         });
 
-        // Marker GS
-        viewer.entities.add({
-            position: Cesium.Cartesian3.fromDegrees(9.22, 45.47),
-            point: { pixelSize: 8, color: Cesium.Color.RED },
-            label: { text: "GS MILANO", font: "12px Share Tech Mono", pixelOffset: new Cesium.Cartesian2(0, -15), fillColor: Cesium.Color.RED }
-        });
+        // Handler click mouse (per selezionare cliccando sul 3D)
+        const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+        handler.setInputAction(function (movement) {
+            const pickedObject = viewer.scene.pick(movement.position);
+            if (Cesium.defined(pickedObject) && pickedObject.id) {
+                const name = pickedObject.id.name;
+                if(satellitesCache[name]) {
+                    // Seleziona nel dropdown
+                    const selector = document.getElementById('sat-selector');
+                    selector.value = name;
+                    changeSatellite(); // Attiva la logica
+                }
+            }
+        }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
-        // Tracking Logic
+
+        // --- 2. GESTIONE DATI SATELLITARI (TLE) ---
+        const TLE_URL = 'https://corsproxy.io/?' + encodeURIComponent('https://celestrak.org/NORAD/elements/gp.php?GROUP=visual&FORMAT=tle');
         const BACKUP_TLE = [
-            { name: "ISS", l1: "1 25544U 98067A   24156.54672672  .00016503  00000+0  29765-3 0  9993", l2: "2 25544  51.6396 156.6874 0004739 233.8038 232.0673 15.49886026456636"},
+            { name: "ISS (ZARYA)", l1: "1 25544U 98067A   24156.54672672  .00016503  00000+0  29765-3 0  9993", l2: "2 25544  51.6396 156.6874 0004739 233.8038 232.0673 15.49886026456636"},
             { name: "CSS (TIANHE)", l1: "1 48274U 21035A   24156.49503463  .00021308  00000+0  19198-3 0  9996", l2: "2 48274  41.4729 270.8351 0006764 250.6401 247.9628 15.60275811169094"}
         ];
 
-        async function initSatellites() {
-            addLog("Connecting to Celestrak...");
+        async function initData() {
+            log("Downloading orbital elements...");
             try {
-                const url = 'https://corsproxy.io/?' + encodeURIComponent('https://celestrak.org/NORAD/elements/gp.php?GROUP=visual&FORMAT=tle');
-                const resp = await fetch(url);
+                const resp = await fetch(TLE_URL);
                 if(!resp.ok) throw new Error("Network KO");
                 const text = await resp.text();
-                processData(text.split('\n'));
-                addLog("Orbital data received.");
+                processTLE(text.split('\n'));
+                log("Data updated from CelesTrak.");
             } catch (e) {
-                addLog("Connection failed. Using Backup Data.");
+                log("Connection failed. Using Backup.");
                 let dummy = [];
                 BACKUP_TLE.forEach(s => { dummy.push(s.name, s.l1, s.l2); });
-                processData(dummy);
+                processTLE(dummy);
             }
         }
 
-        function processData(lines) {
+        function processTLE(lines) {
+            const selector = document.getElementById('sat-selector');
+            selector.innerHTML = '<option value="">-- SELECT SATELLITE --</option>'; // Reset
+
             const start = Cesium.JulianDate.now();
             const stop = Cesium.JulianDate.addSeconds(start, 5400, new Cesium.JulianDate());
-            
+
+            // Imposta Clock
             viewer.clock.startTime = start.clone();
             viewer.clock.stopTime = stop.clone();
             viewer.clock.currentTime = start.clone();
-            viewer.clock.multiplier = 10;
+            viewer.clock.multiplier = 1; // Velocità reale (1x) o 10x per vedere movimento
             viewer.clock.clockRange = Cesium.ClockRange.LOOP_STOP;
 
             let count = 0;
             for(let i=0; i<lines.length; i++) {
                 if(lines[i].startsWith('1 ') && lines[i+1]?.startsWith('2 ')) {
-                    const name = lines[i-1]?.trim() || "SAT";
-                    try {
-                        addSatellite(name, lines[i], lines[i+1], start, stop);
-                        count++;
-                    } catch(e) {}
+                    const name = lines[i-1]?.trim() || "SAT-" + count;
+                    const l1 = lines[i];
+                    const l2 = lines[i+1];
+
+                    // Crea Entità Cesium
+                    const entity = createCesiumEntity(name, l1, l2, start, stop);
+                    
+                    // Salva in cache per calcoli matematici
+                    const satrec = satellite.twoline2satrec(l1, l2);
+                    satellitesCache[name] = { satrec: satrec, entity: entity };
+
+                    // Aggiungi al Dropdown
+                    const opt = document.createElement('option');
+                    opt.value = name;
+                    opt.innerText = name;
+                    selector.appendChild(opt);
+                    
+                    count++;
                 }
             }
-            document.getElementById('sat-count-ui').innerText = count;
+            log(`Tracking ${count} objects.`);
+            
+            // Seleziona il primo satellite automaticamente (es. ISS)
+            if(count > 0) {
+                selector.selectedIndex = 1;
+                changeSatellite();
+            }
         }
 
-        function addSatellite(name, l1, l2, start, stop) {
+        function createCesiumEntity(name, l1, l2, start, stop) {
             const satrec = satellite.twoline2satrec(l1, l2);
             const positions = new Cesium.SampledPositionProperty();
             
+            // Campionamento traiettoria
             const totalSec = Cesium.JulianDate.secondsDifference(stop, start);
-            for(let t=0; t<=totalSec; t+=60) {
+            for(let t=0; t<=totalSec; t+=30) {
                 const time = Cesium.JulianDate.addSeconds(start, t, new Cesium.JulianDate());
                 const jsDate = Cesium.JulianDate.toDate(time);
                 const pv = satellite.propagate(satrec, jsDate);
                 const gmst = satellite.gstime(jsDate);
+                
                 if(pv.position && gmst) {
                     const gd = satellite.eciToGeodetic(pv.position, gmst);
                     const cart = Cesium.Cartesian3.fromRadians(gd.longitude, gd.latitude, gd.height*1000);
@@ -304,34 +340,24 @@
                 }
             }
 
-            // ORIENTAMENTO RICHIESTO DALL'UTENTE
-            // Impostato a PITCH = 0 come richiesto
-            const CORREZIONE_HEADING = 0;
-            const CORREZIONE_PITCH   = 90;  // <-- TUA RICHIESTA QUI
-            const CORREZIONE_ROLL    = 0;
-
-            const fixedCorrection = Cesium.Quaternion.fromHeadingPitchRoll(
-                new Cesium.HeadingPitchRoll(
-                    Cesium.Math.toRadians(CORREZIONE_HEADING),
-                    Cesium.Math.toRadians(CORREZIONE_PITCH),
-                    Cesium.Math.toRadians(CORREZIONE_ROLL)
-                )
-            );
-
+            // Orientamento (Pitch 0 fisso come richiesto)
             const velocityOrientation = new Cesium.VelocityOrientationProperty(positions);
+            const fixedCorrection = Cesium.Quaternion.fromHeadingPitchRoll(
+                new Cesium.HeadingPitchRoll(0, 0, 0)
+            );
             const finalOrientation = new Cesium.CallbackProperty((time, result) => {
                 const ori = velocityOrientation.getValue(time, result);
                 if (!ori) return undefined;
                 return Cesium.Quaternion.multiply(ori, fixedCorrection, result || new Cesium.Quaternion());
             }, false);
 
-            viewer.entities.add({
+            return viewer.entities.add({
                 name: name,
                 position: positions,
                 orientation: finalOrientation,
                 model: {
-                    uri: 'satellite.glb', // O usa l'URL online se non hai il file
-                    minimumPixelSize: 64, maximumScale: 20000, runAnimations: true
+                    uri: 'satellite.glb', // O 'https://raw.githubusercontent.com/CesiumGS/cesium/main/Apps/SampleData/models/CesiumAir/Cesium_Air.glb' per test
+                    minimumPixelSize: 64, maximumScale: 10000, runAnimations: true
                 },
                 path: {
                     resolution: 1, width: 1,
@@ -339,14 +365,85 @@
                     leadTime: 0, trailTime: 5400
                 },
                 label: { 
-                    text: name, font: "10px Share Tech Mono", show: false,
+                    text: name, font: "10px Monospace", show: false,
                     distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 4000000)
                 }
             });
         }
 
-        setTimeout(initSatellites, 1500);
+        // --- 3. LOGICA DI SELEZIONE E CALCOLO ---
+
+        function changeSatellite() {
+            const selector = document.getElementById('sat-selector');
+            const satName = selector.value;
+            
+            if(!satName || !satellitesCache[satName]) return;
+
+            // Aggiorna stato globale
+            selectedSatellite = satellitesCache[satName];
+            document.getElementById('active-sat-label').innerText = satName;
+            log(`Target acquired: ${satName}`);
+
+            // CAMERA TRACKING: Cesium segue automaticamente l'oggetto
+            viewer.trackedEntity = selectedSatellite.entity;
+        }
+
+        // --- 4. LOOP TELEMETRIA (CALCOLI FISICI REALI) ---
+        function updateTelemetryLoop() {
+            if(!selectedSatellite) return;
+
+            const now = new Date(); // Tempo attuale reale
+            
+            // 1. Propagazione SGP4
+            const positionAndVelocity = satellite.propagate(selectedSatellite.satrec, now);
+            const positionEci = positionAndVelocity.position;
+            const velocityEci = positionAndVelocity.velocity;
+
+            if(!positionEci) return; // Errore di calcolo
+
+            // 2. Calcolo coordinate osservatore (GS Milano)
+            const gmst = satellite.gstime(now);
+            const observerGd = {
+                longitude: satellite.degreesToRadians(GS_LON),
+                latitude: satellite.degreesToRadians(GS_LAT),
+                height: GS_ALT
+            };
+
+            // 3. Calcolo Look Angles (Azimuth/Elevation/Range)
+            // satellite.js usa coordinate ECF per i look angles
+            const positionEcf = satellite.eciToEcf(positionEci, gmst);
+            const lookAngles = satellite.ecfToLookAngles(observerGd, positionEcf);
+
+            const azimuth = satellite.radiansToDegrees(lookAngles.azimuth);
+            const elevation = satellite.radiansToDegrees(lookAngles.elevation);
+            const rangeKm = lookAngles.rangeSat; // Distanza in km
+
+            // 4. Calcolo Altitudine Satellite (dal livello del mare)
+            const satGd = satellite.eciToGeodetic(positionEci, gmst);
+            const altKm = satGd.height;
+
+            // 5. Aggiornamento UI
+            document.getElementById('azimuth').innerText = azimuth.toFixed(2) + "°";
+            document.getElementById('elevation').innerText = elevation.toFixed(2) + "°";
+            document.getElementById('altitude').innerText = altKm.toFixed(0);
+            
+            // Colore Elevazione: Verde se visibile (>0), Rosso se sotto l'orizzonte
+            const elEl = document.getElementById('elevation');
+            if(elevation > 0) {
+                elEl.style.color = "#00ff88"; // Verde
+                document.getElementById('snr').innerText = (15 + Math.random()*5).toFixed(1); // Simula segnale buono
+            } else {
+                elEl.style.color = "#ff0055"; // Rosso
+                document.getElementById('snr').innerText = "0.0"; // Niente segnale
+            }
+        }
+
+        // Avvia il loop di calcolo (ogni 500ms)
+        setInterval(updateTelemetryLoop, 500);
+
+        // Avvia tutto
+        setTimeout(initData, 1000);
+
     </script>
 </body>
 </html>
-
