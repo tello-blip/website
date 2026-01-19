@@ -1,482 +1,178 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PoliSpace | Web Gpredict</title>
+  <meta charset="UTF-8">
+  <title>Satellite Tracking Hologram</title>
+  <style>
+    body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
+    #globeViz { width: 100vw; height: 100vh; }
     
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
-    
-    <script src="https://cesium.com/downloads/cesiumjs/releases/1.112/Build/Cesium/Cesium.js"></script>
-    <link href="https://cesium.com/downloads/cesiumjs/releases/1.112/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/satellite.js/5.0.0/satellite.min.js"></script>
+    /* Optional: A loading overlay */
+    #loading {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      color: #0088ff; font-family: sans-serif; pointer-events: none;
+      text-transform: uppercase; letter-spacing: 2px;
+    }
+  </style>
 
-    <style>
-        :root {
-            --bg-dark: #0b0d17;
-            --panel-bg: #15192b;
-            --primary: #00d4ff;
-            --accent: #ff0055;
-            --text-main: #e0e6ed;
-            --text-dim: #8b9bb4;
-            --border: 1px solid rgba(255, 255, 255, 0.1);
-            --font-tech: 'Share Tech Mono', monospace;
-        }
-
-        * { box-sizing: border-box; }
-
-        body {
-            background-color: var(--bg-dark);
-            color: var(--text-main);
-            font-family: 'Roboto', sans-serif;
-            margin: 0; height: 100vh;
-            display: grid;
-            grid-template-rows: 50px 1fr 25px; /* Header, Main, Footer */
-            overflow: hidden;
-        }
-
-        /* HEADER */
-        header {
-            background: rgba(11,13,23,0.95);
-            border-bottom: 1px solid var(--primary);
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 0 20px;
-        }
-        .brand { font-family: var(--font-tech); font-size: 1.2rem; color: var(--primary); letter-spacing: 2px; }
-        .clock { font-family: var(--font-tech); color: #fff; }
-
-        /* MAIN LAYOUT */
-        .workspace {
-            display: grid;
-            grid-template-columns: 300px 1fr 320px;
-            gap: 2px;
-            background: #000;
-        }
-
-        /* PANELS */
-        .module {
-            background: var(--panel-bg);
-            border-right: 1px solid #222;
-            display: flex; flex-direction: column;
-            overflow: hidden;
-        }
-        .module-header {
-            background: #1f2438; padding: 5px 10px; font-size: 0.8rem;
-            text-transform: uppercase; color: var(--text-dim); border-bottom: 1px solid #333;
-            font-weight: 700; display: flex; justify-content: space-between;
-        }
-
-        /* LEFT: LIST */
-        .sat-list { overflow-y: auto; flex-grow: 1; }
-        .sat-row {
-            display: grid; grid-template-columns: 1fr 60px 60px;
-            padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.05);
-            font-family: var(--font-tech); font-size: 0.85rem; cursor: pointer;
-            transition: background 0.2s;
-        }
-        .sat-row:hover { background: rgba(0, 212, 255, 0.1); }
-        .sat-row.active { background: rgba(0, 212, 255, 0.2); border-left: 3px solid var(--primary); }
-        .sat-az { color: var(--primary); text-align: right; }
-        .sat-el { color: var(--text-dim); text-align: right; }
-        .sat-el.visible { color: #0f0; font-weight: bold; }
-
-        /* CENTER: GLOBE */
-        .globe-container { position: relative; width: 100%; height: 100%; }
-        #cesiumContainer { width: 100%; height: 100%; }
-        
-        /* RIGHT: DETAILS */
-        .details-col { display: grid; grid-template-rows: 300px auto 1fr; gap: 2px; background: #000; border-left: 1px solid #333; }
-        
-        /* POLAR PLOT */
-        .polar-container { 
-            position: relative; display: flex; justify-content: center; align-items: center; 
-            background: #000; padding: 10px;
-        }
-        canvas#polarCanvas { background: radial-gradient(circle, #1a2035 0%, #000 70%); border-radius: 50%; border: 1px solid #333; }
-
-        /* DATA TABLES */
-        .data-table { width: 100%; border-collapse: collapse; font-family: var(--font-tech); font-size: 0.8rem; }
-        .data-table td { padding: 4px 8px; border-bottom: 1px solid #222; }
-        .data-table .label { color: var(--text-dim); }
-        .data-table .val { text-align: right; color: var(--primary); }
-        
-        /* PASS PREDICTIONS */
-        .pass-list { font-size: 0.75rem; width: 100%; }
-        .pass-list th { text-align: left; color: #888; padding: 5px; border-bottom: 1px solid #444; }
-        .pass-list td { padding: 5px; border-bottom: 1px solid #222; color: #eee; }
-
-        /* FOOTER */
-        footer {
-            background: #0b0d17; border-top: 1px solid #333;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 0.7rem; color: #555;
-        }
-    </style>
+  <script src="//unpkg.com/three"></script>
+  <script src="//unpkg.com/globe.gl"></script>
+  <script src="//unpkg.com/satellite.js/dist/satellite.min.js"></script>
 </head>
 <body>
 
-    <header>
-        <div class="brand">GPREDICT <span style="color:#fff">// WEB</span></div>
-        <div class="clock" id="utc-clock">00:00:00 UTC</div>
-    </header>
+  <div id="loading">Initializing System...</div>
+  <div id="globeViz"></div>
 
-    <div class="workspace">
-        
-        <div class="module">
-            <div class="module-header">
-                <span>Active Satellites</span>
-                <span id="sat-count-badge">0</span>
-            </div>
-            <div class="sat-list" id="sat-list-container"></div>
-        </div>
+  <script>
+    // --- CONFIGURATION ---
+    const EARTH_RADIUS_KM = 6371; 
+    const SAT_SIZE = 0.8;          // Size of the satellite dots
+    const TIME_STEP = 1000;        // Animation speed helper
+    const DOT_DENSITY = 0.4;       // How dense the earth surface dots are
 
-        <div class="module" style="position:relative;">
-            <div id="cesiumContainer"></div>
-            <div style="position:absolute; bottom:10px; left:10px; background:rgba(0,0,0,0.7); padding:5px; font-family:var(--font-tech); font-size:0.8rem; color:var(--primary); pointer-events:none;">
-                SELECTED: <span id="overlay-sat-name" style="color:#fff">NONE</span>
-            </div>
-        </div>
+    // --- 1. SETUP THE GLOBE ---
+    const globeElement = document.getElementById('globeViz');
+    
+    const world = Globe()
+      (globeElement)
+      .backgroundColor('#000000')  // Pure black background
+      .showGlobe(false)            // Hide the standard physical earth skin
+      .atmosphereColor('#3a228a')  // Blue/Purple atmosphere
+      .atmosphereAltitude(0.2)     // Atmosphere glow height
+      
+      // Setup the "Dot Matrix" Earth Layers
+      .pointsData([]) // Will populate later
+      .pointAltitude(0) // Flat on surface
+      .pointColor(() => '#3a5fcd') // Blue dots for land
+      .pointRadius(0.2) // Small dots
+      .pointResolution(2); // Low poly for performance
 
-        <div class="details-col">
-            
-            <div class="module">
-                <div class="module-header">Polar View (Skyplot)</div>
-                <div class="polar-container">
-                    <canvas id="polarCanvas" width="260" height="260"></canvas>
-                </div>
-            </div>
-
-            <div class="module">
-                <div class="module-header">Radio Control</div>
-                <table class="data-table">
-                    <tr><td class="label">Range</td><td class="val" id="val-range">-- km</td></tr>
-                    <tr><td class="label">Range Rate</td><td class="val" id="val-rate">-- km/s</td></tr>
-                    <tr><td class="label">Downlink (437M)</td><td class="val" id="val-downlink">-- MHz</td></tr>
-                    <tr><td class="label">Uplink (145M)</td><td class="val" id="val-uplink">-- MHz</td></tr>
-                </table>
-            </div>
-
-            <div class="module" style="overflow-y:auto;">
-                <div class="module-header">Next Passes (12h)</div>
-                <table class="pass-list">
-                    <thead><tr><th>AOS (UTC)</th><th>Dur.</th><th>Max El</th></tr></thead>
-                    <tbody id="pass-table-body">
-                        <tr><td colspan="3" style="text-align:center; color:#555;">Select a Satellite</td></tr>
-                    </tbody>
-                </table>
-            </div>
-
-        </div>
-    </div>
-
-    <footer>
-        PoliSpace Ground Station System | GS: Milano (45.47N, 9.22E)
-    </footer>
-
-    <script>
-        // --- CONFIGURAZIONE ---
-        const GS = { lat: 45.47, lon: 9.22, alt: 0.120 }; // Milano
-        const FREQ_DOWN = 437000000; 
-        const FREQ_UP = 145900000;   
-        const C = 299792.458; // km/s
-
-        // FIX SATELLITI: Usa "VISUAL" per avere ISS, Hubble, Tiangong, etc.
-        const TLE_URL = 'https://corsproxy.io/?' + encodeURIComponent('https://celestrak.org/NORAD/elements/gp.php?GROUP=visual&FORMAT=tle');
-
-        let viewer;
-        let satellites = []; 
-        let selectedSatIndex = -1;
-
-        // --- 1. SETUP CESIUM (MAPPA STABILE) ---
-        viewer = new Cesium.Viewer('cesiumContainer', {
-            imageryProvider: false, baseLayerPicker: false, geocoder: false, homeButton: false, 
-            infoBox: false, sceneModePicker: false, selectionIndicator: false, timeline: false, 
-            animation: false, navigationHelpButton: false, shouldAnimate: true,
-            contextOptions: { webgl: { alpha: true } }
-        });
-        
-        // Dark Mode & Cleanup
-        viewer.scene.skyBox.show = false;
-        viewer.scene.backgroundColor = Cesium.Color.BLACK;
-        viewer.scene.globe.baseColor = Cesium.Color.BLACK;
-        viewer.cesiumWidget.creditContainer.style.display = "none";
-        
-        // Mappa OSM Scura (Fix visualizzazione)
-        try {
-            const osm = new Cesium.OpenStreetMapImageryProvider({ url : 'https://a.tile.openstreetmap.org/' });
-            const layer = viewer.imageryLayers.addImageryProvider(osm);
-            layer.saturation = 0; layer.brightness = 0.3; layer.contrast = 2.0;
-        } catch(e){}
-
-        // Marker GS Milano
-        viewer.entities.add({
-            position: Cesium.Cartesian3.fromDegrees(GS.lon, GS.lat),
-            point: { pixelSize: 8, color: Cesium.Color.RED },
-            label: { text: "GS MILANO", font: "10px Monospace", pixelOffset: new Cesium.Cartesian2(0,-15), fillColor: Cesium.Color.RED }
-        });
-
-        // FIX ZOOM: Imposta la vista UNA volta sola e non la tocca più
-        viewer.camera.setView({
-            destination: Cesium.Cartesian3.fromDegrees(10, 42, 13000000), // Vista Europa
-            orientation: { heading: 0.0, pitch: -1.57, roll: 0.0 }
-        });
-
-        // --- 2. CARICAMENTO DATI ---
-        async function loadData() {
-            try {
-                const res = await fetch(TLE_URL);
-                const text = await res.text();
-                parseTLE(text.split('\n'));
-            } catch(e) { console.error("Data Load Error", e); }
-        }
-
-        function parseTLE(lines) {
-            satellites = [];
-            // Non rimuoviamo tutto per non perdere la GS e la posizione camera
-            // Rimuoviamo solo le entità dei satelliti se stiamo aggiornando
-            // Per semplicità qui aggiungiamo.
-            
-            let count = 0;
-            const start = Cesium.JulianDate.now();
-            const stop = Cesium.JulianDate.addSeconds(start, 5400, new Cesium.JulianDate());
-
-            for(let i=0; i<lines.length; i++) {
-                if(lines[i].startsWith('1 ') && lines[i+1]?.startsWith('2 ')) {
-                    const name = lines[i-1].trim();
-                    const satrec = satellite.twoline2satrec(lines[i], lines[i+1]);
-                    
-                    // Crea Entità Cesium (Punto Semplice + Scia)
-                    // Usiamo SampledPosition per evitare crash
-                    const pathPos = new Cesium.SampledPositionProperty();
-                    // Calcolo scia a bassa risoluzione (ogni 2 min) per performance
-                    const totalSec = Cesium.JulianDate.secondsDifference(stop, start);
-                    for(let t=0; t<=totalSec; t+=120) {
-                        const time = Cesium.JulianDate.addSeconds(start, t, new Cesium.JulianDate());
-                        const jsDate = Cesium.JulianDate.toDate(time);
-                        const pv = satellite.propagate(satrec, jsDate);
-                        const gmst = satellite.gstime(jsDate);
-                        if(pv.position) {
-                            const gd = satellite.eciToGeodetic(pv.position, gmst);
-                            pathPos.addSample(time, Cesium.Cartesian3.fromRadians(gd.longitude, gd.latitude, gd.height*1000));
-                        }
-                    }
-
-                    const entity = viewer.entities.add({
-                        position: pathPos,
-                        point: { pixelSize: 4, color: Cesium.Color.CYAN }, // Satelliti normali ciano
-                        label: { text: name, font:"10px Monospace", show: false, pixelOffset: new Cesium.Cartesian2(0,10) },
-                        path: { resolution: 1, width: 1, material: Cesium.Color.CYAN.withAlpha(0.2), leadTime:0, trailTime: 5400 }
-                    });
-
-                    satellites.push({
-                        name: name,
-                        satrec: satrec,
-                        entity: entity,
-                        data: { az: 0, el: 0, range: 0, rate: 0 }
-                    });
-                    count++;
-                }
+    // --- 2. GENERATE EARTH DOTS (THE HOLOGRAPHIC LOOK) ---
+    // We fetch a GeoJSON of landmasses, then generate random points inside them
+    // to create the "tech grid" look without needing a heavy texture.
+    fetch('//unpkg.com/world-atlas/countries-110m.json')
+      .then(res => res.json())
+      .then(worldData => {
+        // We use a pre-calculated set of points for the grid effect 
+        // using a hex-bin dataset often used in these visualizations.
+        // This is a common trick to get the "dotted continent" look.
+        fetch('//raw.githubusercontent.com/vasturiano/globe.gl/master/example/datasets/world_population.csv')
+          .then(res => res.text())
+          .then(csv => {
+            const points = [];
+            const rows = csv.split('\n');
+            // Parse CSV, skipping header
+            for (let i = 1; i < rows.length; i++) {
+              if(!rows[i]) continue;
+              const cols = rows[i].split(',');
+              // Only take every Nth point to keep it looking like a grid, not a solid blob
+              if (Math.random() > 0.8) { 
+                points.push({ lat: +cols[2], lng: +cols[3], size: 0.1 });
+              }
             }
-            document.getElementById('sat-count-badge').innerText = count;
-            buildSatList();
-            
-            // Avvia Loop Aggiornamento
-            setInterval(updateRealtime, 1000); 
-            setInterval(updateClock, 1000);
-        }
+            // Feed the dots to the globe
+            world.pointsData(points);
+            document.getElementById('loading').innerText = "Acquiring Orbital Data...";
+          });
+      });
 
-        // --- 3. INTERFACCIA UTENTE ---
-        function buildSatList() {
-            const container = document.getElementById('sat-list-container');
-            container.innerHTML = '';
-            satellites.forEach((sat, idx) => {
-                const row = document.createElement('div');
-                row.className = 'sat-row';
-                row.id = `sat-row-${idx}`;
-                row.innerHTML = `
-                    <div class="sat-name">${sat.name}</div>
-                    <div class="sat-az" id="list-az-${idx}">000</div>
-                    <div class="sat-el" id="list-el-${idx}">00</div>
-                `;
-                row.onclick = () => selectSatellite(idx);
-                container.appendChild(row);
+    // --- 3. SATELLITE SETUP ---
+    // Define how satellites look
+    world.objectLat('lat')
+      .objectLng('lng')
+      .objectAltitude('alt')
+      .objectLabel('name')
+      .objectThreeObject(() => {
+        // Create a small glowing sphere for each satellite
+        const mesh = new THREE.Mesh(
+          new THREE.SphereGeometry(SAT_SIZE),
+          new THREE.MeshBasicMaterial({ color: '#ff0055' }) // Pink/Red
+        );
+        return mesh;
+      });
+
+    // --- 4. FETCH SATELLITE DATA ---
+    // Using a CORS proxy to bypass browser security restrictions on CelesTrak
+    const PROXY_URL = 'https://corsproxy.io/?'; 
+    const CELESTRAK_URL = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle';
+    
+    fetch(PROXY_URL + encodeURIComponent(CELESTRAK_URL))
+      .then(r => r.text())
+      .then(rawData => {
+        const satData = parseTLE(rawData);
+        
+        // Load data into globe
+        world.objectsData(satData);
+        document.getElementById('loading').style.display = 'none';
+
+        // Start Animation Loop
+        (function tick() {
+          updateSatellites(satData);
+          world.objectsData(satData); // Trigger visual update
+          requestAnimationFrame(tick);
+        })();
+      })
+      .catch(err => {
+        console.error("Failed to fetch TLE:", err);
+        document.getElementById('loading').innerText = "Data Fetch Failed (Check Console)";
+      });
+
+    // --- 5. PARSER & MATH UTILITIES ---
+    
+    function parseTLE(data) {
+      const lines = data.split('\n');
+      const satData = [];
+      // TLE standard is 3 lines: Name, Line 1, Line 2
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        // Look for the start of a TLE set (Line 1 usually starts with '1 ')
+        // But often the file is Name \n Line1 \n Line2
+        if (line.startsWith('1 ') && lines[i+1] && lines[i+1].startsWith('2 ')) {
+          const name = lines[i-1] ? lines[i-1].trim() : "Unknown";
+          const line1 = line;
+          const line2 = lines[i+1].trim();
+          
+          try {
+            const satRec = satellite.twoline2satrec(line1, line2);
+            satData.push({
+              satrec: satRec,
+              name: name,
+              lat: 0, lng: 0, alt: 0 
             });
+          } catch (e) { /* ignore bad data */ }
         }
+      }
+      // Limit number of satellites for performance if needed (e.g. slice(0, 3000))
+      return satData;
+    }
 
-        function selectSatellite(idx) {
-            // Deseleziona precedente
-            if(selectedSatIndex !== -1) {
-                document.getElementById(`sat-row-${selectedSatIndex}`).classList.remove('active');
-                const prevSat = satellites[selectedSatIndex];
-                prevSat.entity.point.color = Cesium.Color.CYAN;
-                prevSat.entity.label.show = false;
-                prevSat.entity.path.material = Cesium.Color.CYAN.withAlpha(0.2);
-                prevSat.entity.path.width = 1;
-            }
-            
-            // Seleziona nuovo
-            selectedSatIndex = idx;
-            const sat = satellites[idx];
-            document.getElementById(`sat-row-${idx}`).classList.add('active');
-            document.getElementById('overlay-sat-name').innerText = sat.name;
+    function updateSatellites(satData) {
+      const now = new Date();
+      const gmst = satellite.gstime(now);
 
-            // Evidenzia sul Globo (MA NON SPOSTA LA CAMERA!)
-            sat.entity.point.color = Cesium.Color.YELLOW;
-            sat.entity.label.show = true;
-            sat.entity.label.fillColor = Cesium.Color.YELLOW;
-            sat.entity.path.material = Cesium.Color.YELLOW.withAlpha(0.5);
-            sat.entity.path.width = 2;
+      satData.forEach(d => {
+        // Propagate satellite to current time
+        const positionAndVelocity = satellite.propagate(d.satrec, now);
+        const positionEci = positionAndVelocity.position;
 
-            // Avvia predizione passaggi
-            predictPasses(sat);
+        if (positionEci) {
+          const positionGd = satellite.eciToGeodetic(positionEci, gmst);
+          
+          d.lat = satellite.degreesLat(positionGd.latitude);
+          d.lng = satellite.degreesLong(positionGd.longitude);
+          // Altitude: Globe.gl expects altitude in terms of Globe Radius units.
+          // Earth Radius = 6371km. If Sat is at 500km, val should be 500/6371.
+          d.alt = positionGd.height / EARTH_RADIUS_KM;
         }
+      });
+    }
 
-        // --- 4. LOOP MATEMATICO ---
-        function updateRealtime() {
-            const now = new Date();
-            const gmst = satellite.gstime(now);
+    // --- 6. INTERACTION ---
+    // Enable auto-rotation
+    world.controls().autoRotate = true;
+    world.controls().autoRotateSpeed = 0.5;
 
-            satellites.forEach((sat, idx) => {
-                const pv = satellite.propagate(sat.satrec, now);
-                if(!pv.position || !pv.velocity) return;
-
-                const posEcf = satellite.eciToEcf(pv.position, gmst);
-                const observer = { longitude: satellite.degreesToRadians(GS.lon), latitude: satellite.degreesToRadians(GS.lat), height: GS.alt };
-                const look = satellite.ecfToLookAngles(observer, posEcf);
-
-                // Calcolo Range Rate (Approssimato per Doppler)
-                const timeNext = new Date(now.getTime() + 1000);
-                const gmstNext = satellite.gstime(timeNext);
-                const pvNext = satellite.propagate(sat.satrec, timeNext);
-                const posEcfNext = satellite.eciToEcf(pvNext.position, gmstNext);
-                const lookNext = satellite.ecfToLookAngles(observer, posEcfNext);
-                const rangeRate = (lookNext.rangeSat - look.rangeSat); // km/s
-
-                sat.data.az = satellite.radiansToDegrees(look.azimuth);
-                sat.data.el = satellite.radiansToDegrees(look.elevation);
-                sat.data.range = look.rangeSat;
-                sat.data.rate = rangeRate;
-
-                // Aggiorna Lista
-                const elDiv = document.getElementById(`list-el-${idx}`);
-                document.getElementById(`list-az-${idx}`).innerText = sat.data.az.toFixed(0);
-                elDiv.innerText = sat.data.el.toFixed(0);
-                
-                if(sat.data.el > 0) elDiv.classList.add('visible');
-                else elDiv.classList.remove('visible');
-            });
-
-            // Aggiorna Dettagli (se selezionato)
-            if(selectedSatIndex !== -1) {
-                const sat = satellites[selectedSatIndex];
-                
-                // Calcolo Frequenze Doppler
-                const shiftDown = - (sat.data.rate / C) * FREQ_DOWN;
-                const shiftUp = - (sat.data.rate / C) * FREQ_UP;
-
-                document.getElementById('val-range').innerText = sat.data.range.toFixed(0) + " km";
-                document.getElementById('val-rate').innerText = sat.data.rate.toFixed(3) + " km/s";
-                document.getElementById('val-downlink').innerText = ((FREQ_DOWN + shiftDown)/1e6).toFixed(5);
-                document.getElementById('val-uplink').innerText = ((FREQ_UP + shiftUp)/1e6).toFixed(5);
-
-                drawPolarPlot(sat.data.az, sat.data.el);
-            }
-        }
-
-        // --- 5. RENDER POLAR PLOT ---
-        function drawPolarPlot(az, el) {
-            const canvas = document.getElementById('polarCanvas');
-            const ctx = canvas.getContext('2d');
-            const w = canvas.width; const h = canvas.height;
-            const cx = w/2; const cy = h/2; const r = (w/2) - 20;
-
-            ctx.clearRect(0,0,w,h);
-
-            // Griglia
-            ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
-            ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2*Math.PI); ctx.stroke(); 
-            ctx.beginPath(); ctx.arc(cx, cy, r*0.66, 0, 2*Math.PI); ctx.stroke(); 
-            ctx.beginPath(); ctx.arc(cx, cy, r*0.33, 0, 2*Math.PI); ctx.stroke(); 
-
-            // Assi
-            ctx.beginPath(); ctx.moveTo(cx-r, cy); ctx.lineTo(cx+r, cy); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(cx, cy-r); ctx.lineTo(cx, cy+r); ctx.stroke();
-
-            // Etichette N/S/E/W
-            ctx.fillStyle = '#00d4ff'; ctx.font = "12px Monospace"; ctx.textAlign = "center";
-            ctx.fillText("N", cx, cy-r-5); ctx.fillText("E", cx+r+10, cy+4);
-
-            if(el < 0) {
-                ctx.fillStyle = "#555"; ctx.fillText("LOS", cx, cy+20);
-                return;
-            }
-
-            // Posizione Punto
-            const rSat = r * ((90 - el) / 90);
-            const angle = (az - 90) * (Math.PI / 180);
-            const xSat = cx + rSat * Math.cos(angle);
-            const ySat = cy + rSat * Math.sin(angle);
-
-            // Linea e Punto
-            ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(xSat, ySat);
-            ctx.strokeStyle = 'rgba(0, 212, 255, 0.3)'; ctx.stroke();
-            ctx.beginPath(); ctx.arc(xSat, ySat, 6, 0, 2*Math.PI);
-            ctx.fillStyle = '#00d4ff'; ctx.fill();
-            ctx.fillStyle = '#fff'; ctx.fillText(satellites[selectedSatIndex].name, xSat, ySat-10);
-        }
-
-        // --- 6. PREDIZIONE PASSAGGI ---
-        function predictPasses(sat) {
-            const table = document.getElementById('pass-table-body');
-            table.innerHTML = '<tr><td colspan="3" style="text-align:center;">Calculating...</td></tr>';
-
-            setTimeout(() => {
-                const now = new Date();
-                const passes = [];
-                let isTracking = false; let passStart = null; let maxEl = 0;
-                
-                // Scansiona prossime 12h a step di 60s
-                const stepSeconds = 60; const horizon = 12 * 60 * 60; 
-
-                for(let t=0; t<=horizon; t+=stepSeconds) {
-                    const time = new Date(now.getTime() + t*1000);
-                    const pv = satellite.propagate(sat.satrec, time);
-                    const gmst = satellite.gstime(time);
-                    const posEcf = satellite.eciToEcf(pv.position, gmst);
-                    const look = satellite.ecfToLookAngles({ longitude: satellite.degreesToRadians(GS.lon), latitude: satellite.degreesToRadians(GS.lat), height: GS.alt }, posEcf);
-                    const el = satellite.radiansToDegrees(look.elevation);
-
-                    if(el > 0 && !isTracking) {
-                        isTracking = true; passStart = time; maxEl = el;
-                    } else if(el > 0 && isTracking) {
-                        if(el > maxEl) maxEl = el;
-                    } else if(el < 0 && isTracking) {
-                        isTracking = false;
-                        const duration = (time - passStart) / 1000 / 60; 
-                        passes.push({ start: passStart, duration: duration, maxEl: maxEl });
-                        if(passes.length >= 3) break; 
-                    }
-                }
-
-                table.innerHTML = '';
-                if(passes.length === 0) table.innerHTML = '<tr><td colspan="3">No passes soon</td></tr>';
-
-                passes.forEach(p => {
-                    const h = String(p.start.getUTCHours()).padStart(2,'0');
-                    const m = String(p.start.getUTCMinutes()).padStart(2,'0');
-                    const row = `<tr><td>${h}:${m}</td><td>${p.duration.toFixed(0)}m</td><td style="color:${p.maxEl>45?'#0f0':'#ccc'}">${p.maxEl.toFixed(0)}°</td></tr>`;
-                    table.innerHTML += row;
-                });
-            }, 10);
-        }
-
-        function updateClock() {
-            const now = new Date();
-            document.getElementById('utc-clock').innerText = now.toISOString().split('T')[1].split('.')[0] + " UTC";
-        }
-
-        loadData();
-
-    </script>
+  </script>
 </body>
 </html>
