@@ -1,179 +1,186 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="it">
 <head>
-  <meta charset="UTF-8">
-  <title>Satellite Tracking Hologram</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Globo Astratto Rotante</title>
   <style>
-    body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
-    #globeViz { width: 100vw; height: 100vh; }
-    
-    /* Optional: A loading overlay */
-    #loading {
-      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      color: #0088ff; font-family: sans-serif; pointer-events: none;
-      text-transform: uppercase; letter-spacing: 2px;
+    :root {
+      color-scheme: dark;
+      --bg: #030712;
+      --core: #1d4ed8;
+      --core-glow: #38bdf8;
+      --grid: rgba(125, 211, 252, 0.45);
+      --ring: rgba(56, 189, 248, 0.28);
+      --text: #dbeafe;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(59, 130, 246, 0.2), transparent 35%),
+        radial-gradient(circle at 80% 10%, rgba(14, 165, 233, 0.18), transparent 30%),
+        var(--bg);
+      overflow: hidden;
+      font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+      color: var(--text);
+    }
+
+    .scene {
+      position: relative;
+      width: min(85vmin, 720px);
+      aspect-ratio: 1;
+      display: grid;
+      place-items: center;
+      filter: drop-shadow(0 0 42px rgba(14, 165, 233, 0.2));
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+    }
+
+    .label {
+      position: absolute;
+      bottom: -2.5rem;
+      letter-spacing: 0.25em;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      opacity: 0.8;
+      pointer-events: none;
     }
   </style>
-
-  <script src="//unpkg.com/three"></script>
-  <script src="//unpkg.com/globe.gl"></script>
-  <script src="//unpkg.com/satellite.js/dist/satellite.min.js"></script>
 </head>
 <body>
-
-  <div id="loading">Initializing System...</div>
-  <div id="globeViz"></div>
+  <main class="scene" aria-label="Globo terrestre astratto rotante">
+    <canvas id="globe" width="900" height="900"></canvas>
+    <p class="label">Earth · Abstract</p>
+  </main>
 
   <script>
-    // --- CONFIGURATION ---
-    const EARTH_RADIUS_KM = 6371; 
-    const SAT_SIZE = 0.8;          // Size of the satellite dots
-    const TIME_STEP = 1000;        // Animation speed helper
-    const DOT_DENSITY = 0.4;       // How dense the earth surface dots are
+    const canvas = document.getElementById('globe');
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width;
+    const h = canvas.height;
+    const cx = w / 2;
+    const cy = h / 2;
+    const radius = Math.min(w, h) * 0.34;
 
-    // --- 1. SETUP THE GLOBE ---
-    const globeElement = document.getElementById('globeViz');
-    
-    const world = Globe()
-      (globeElement)
-      .backgroundColor('#000000')  // Pure black background
-      .showGlobe(false)            // Hide the standard physical earth skin
-      .atmosphereColor('#3a228a')  // Blue/Purple atmosphere
-      .atmosphereAltitude(0.2)     // Atmosphere glow height
-      
-      // Setup the "Dot Matrix" Earth Layers
-      .pointsData([]) // Will populate later
-      .pointAltitude(0) // Flat on surface
-      .pointColor(() => '#3a5fcd') // Blue dots for land
-      .pointRadius(0.2) // Small dots
-      .pointResolution(2); // Low poly for performance
+    const stripes = Array.from({ length: 24 }, (_, i) => {
+      const t = (i / 23) * 2 - 1;
+      return {
+        y: t,
+        thickness: 1.2 + Math.random() * 1.8,
+        phase: Math.random() * Math.PI * 2
+      };
+    });
 
-    // --- 2. GENERATE EARTH DOTS (THE HOLOGRAPHIC LOOK) ---
-    // We fetch a GeoJSON of landmasses, then generate random points inside them
-    // to create the "tech grid" look without needing a heavy texture.
-    fetch('//unpkg.com/world-atlas/countries-110m.json')
-      .then(res => res.json())
-      .then(worldData => {
-        // We use a pre-calculated set of points for the grid effect 
-        // using a hex-bin dataset often used in these visualizations.
-        // This is a common trick to get the "dotted continent" look.
-        fetch('//raw.githubusercontent.com/vasturiano/globe.gl/master/example/datasets/world_population.csv')
-          .then(res => res.text())
-          .then(csv => {
-            const points = [];
-            const rows = csv.split('\n');
-            // Parse CSV, skipping header
-            for (let i = 1; i < rows.length; i++) {
-              if(!rows[i]) continue;
-              const cols = rows[i].split(',');
-              // Only take every Nth point to keep it looking like a grid, not a solid blob
-              if (Math.random() > 0.8) { 
-                points.push({ lat: +cols[2], lng: +cols[3], size: 0.1 });
-              }
-            }
-            // Feed the dots to the globe
-            world.pointsData(points);
-            document.getElementById('loading').innerText = "Acquiring Orbital Data...";
-          });
-      });
+    const points = Array.from({ length: 180 }, () => {
+      const u = Math.random() * Math.PI * 2;
+      const v = Math.acos(2 * Math.random() - 1);
+      return { theta: u, phi: v, size: 1 + Math.random() * 2.5 };
+    });
 
-    // --- 3. SATELLITE SETUP ---
-    // Define how satellites look
-    world.objectLat('lat')
-      .objectLng('lng')
-      .objectAltitude('alt')
-      .objectLabel('name')
-      .objectThreeObject(() => {
-        // Create a small glowing sphere for each satellite
-        const mesh = new THREE.Mesh(
-          new THREE.SphereGeometry(SAT_SIZE),
-          new THREE.MeshBasicMaterial({ color: '#ff0055' }) // Pink/Red
-        );
-        return mesh;
-      });
+    const stars = Array.from({ length: 140 }, () => ({
+      x: Math.random() * w,
+      y: Math.random() * h,
+      r: Math.random() * 1.8,
+      twinkle: Math.random() * Math.PI * 2
+    }));
 
-    // --- 4. FETCH SATELLITE DATA ---
-    // Using a CORS proxy to bypass browser security restrictions on CelesTrak
-    const PROXY_URL = 'https://corsproxy.io/?'; 
-    const CELESTRAK_URL = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle';
-    
-    fetch(PROXY_URL + encodeURIComponent(CELESTRAK_URL))
-      .then(r => r.text())
-      .then(rawData => {
-        const satData = parseTLE(rawData);
-        
-        // Load data into globe
-        world.objectsData(satData);
-        document.getElementById('loading').style.display = 'none';
+    function drawBackground(time) {
+      ctx.clearRect(0, 0, w, h);
 
-        // Start Animation Loop
-        (function tick() {
-          updateSatellites(satData);
-          world.objectsData(satData); // Trigger visual update
-          requestAnimationFrame(tick);
-        })();
-      })
-      .catch(err => {
-        console.error("Failed to fetch TLE:", err);
-        document.getElementById('loading').innerText = "Data Fetch Failed (Check Console)";
-      });
-
-    // --- 5. PARSER & MATH UTILITIES ---
-    
-    function parseTLE(data) {
-      const lines = data.split('\n');
-      const satData = [];
-      // TLE standard is 3 lines: Name, Line 1, Line 2
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
-        // Look for the start of a TLE set (Line 1 usually starts with '1 ')
-        // But often the file is Name \n Line1 \n Line2
-        if (line.startsWith('1 ') && lines[i+1] && lines[i+1].startsWith('2 ')) {
-          const name = lines[i-1] ? lines[i-1].trim() : "Unknown";
-          const line1 = line;
-          const line2 = lines[i+1].trim();
-          
-          try {
-            const satRec = satellite.twoline2satrec(line1, line2);
-            satData.push({
-              satrec: satRec,
-              name: name,
-              lat: 0, lng: 0, alt: 0 
-            });
-          } catch (e) { /* ignore bad data */ }
-        }
-      }
-      // Limit number of satellites for performance if needed (e.g. slice(0, 30))
-      return satData;
-    }
-
-    function updateSatellites(satData) {
-      const now = new Date();
-      const gmst = satellite.gstime(now);
-
-      satData.forEach(d => {
-        // Propagate satellite to current time
-        const positionAndVelocity = satellite.propagate(d.satrec, now);
-        const positionEci = positionAndVelocity.position;
-
-        if (positionEci) {
-          const positionGd = satellite.eciToGeodetic(positionEci, gmst);
-          
-          d.lat = satellite.degreesLat(positionGd.latitude);
-          d.lng = satellite.degreesLong(positionGd.longitude);
-          // Altitude: Globe.gl expects altitude in terms of Globe Radius units.
-          // Earth Radius = 6371km. If Sat is at 500km, val should be 500/6371.
-          d.alt = positionGd.height / EARTH_RADIUS_KM;
-        }
+      stars.forEach((s) => {
+        const alpha = 0.2 + Math.abs(Math.sin(time * 0.001 + s.twinkle)) * 0.8;
+        ctx.fillStyle = `rgba(186, 230, 253, ${alpha * 0.5})`;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fill();
       });
     }
 
-    // --- 6. INTERACTION ---
-    // Enable auto-rotation
-    world.controls().autoRotate = true;
-    world.controls().autoRotateSpeed = 0.5;
+    function drawGlobe(time) {
+      const spin = time * 0.00028;
 
+      ctx.save();
+      ctx.translate(cx, cy);
+
+      const fill = ctx.createRadialGradient(-radius * 0.2, -radius * 0.25, radius * 0.1, 0, 0, radius);
+      fill.addColorStop(0, '#0f172a');
+      fill.addColorStop(0.55, '#0b2a5f');
+      fill.addColorStop(1, '#020617');
+
+      ctx.beginPath();
+      ctx.arc(0, 0, radius, 0, Math.PI * 2);
+      ctx.fillStyle = fill;
+      ctx.fill();
+
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(0, 0, radius, 0, Math.PI * 2);
+      ctx.clip();
+
+      stripes.forEach((s) => {
+        const y = s.y * radius;
+        const bandR = Math.sqrt(Math.max(radius * radius - y * y, 0));
+        const shift = Math.sin(spin + s.phase) * bandR * 0.25;
+
+        ctx.beginPath();
+        ctx.ellipse(shift, y, bandR, bandR * 0.18, 0, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(125, 211, 252, 0.22)';
+        ctx.lineWidth = s.thickness;
+        ctx.stroke();
+      });
+
+      points.forEach((p) => {
+        const theta = p.theta + spin;
+        const x = radius * Math.sin(p.phi) * Math.cos(theta);
+        const y = radius * Math.cos(p.phi);
+        const z = radius * Math.sin(p.phi) * Math.sin(theta);
+
+        if (z > -radius * 0.2) {
+          const alpha = 0.25 + ((z + radius) / (radius * 2)) * 0.75;
+          ctx.fillStyle = `rgba(56, 189, 248, ${alpha})`;
+          ctx.beginPath();
+          ctx.arc(x, y, p.size * (0.5 + alpha * 0.5), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      });
+
+      ctx.restore();
+
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.3)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, radius * 1.25, radius * 0.4, Math.PI / 7, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.ellipse(0, 0, radius * 1.1, radius * 0.3, -Math.PI / 8, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    function animate(time) {
+      drawBackground(time);
+      drawGlobe(time);
+      requestAnimationFrame(animate);
+    }
+
+    requestAnimationFrame(animate);
   </script>
 </body>
 </html>
-
