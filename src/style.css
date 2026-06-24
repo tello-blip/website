@@ -1,0 +1,565 @@
+/* Reset and Base Styles */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+
+body, html {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: #0b0b0f;
+    font-family: 'Outfit', sans-serif;
+    color: #f3f4f6;
+}
+
+/* 3D Canvas Container */
+#canvas-container {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+}
+
+/* Crosshair and Mining Container */
+#crosshair-container {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 40px;
+    height: 40px;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#crosshair {
+    width: 16px;
+    height: 16px;
+    position: absolute;
+    mix-blend-mode: difference;
+}
+#crosshair::before, #crosshair::after {
+    content: '';
+    position: absolute;
+    background: white;
+}
+#crosshair::before {
+    top: 0;
+    left: 7px;
+    width: 2px;
+    height: 16px;
+}
+#crosshair::after {
+    top: 7px;
+    left: 0;
+    width: 16px;
+    height: 2px;
+}
+
+/* Mining Circular Loader */
+#mining-progress {
+    position: absolute;
+    transform: rotate(0deg);
+    transition: opacity 0.15s ease;
+}
+
+#mining-progress.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* HUD (Hotbar) */
+#hud {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    pointer-events: none;
+}
+
+#hotbar {
+    display: flex;
+    background: rgba(20, 20, 25, 0.85);
+    border: 4px solid #3c3c4a;
+    border-radius: 4px;
+    padding: 4px;
+    gap: 6px;
+    pointer-events: auto;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.hotbar-slot {
+    position: relative;
+    width: 54px;
+    height: 54px;
+    background: rgba(50, 50, 60, 0.6);
+    border: 2px solid #5a5a6e;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.1s ease;
+}
+
+.hotbar-slot:hover {
+    background: rgba(70, 70, 85, 0.8);
+    border-color: #9c9cb8;
+}
+
+.hotbar-slot.active {
+    background: rgba(90, 90, 110, 0.8);
+    border-color: #ffcc00;
+    box-shadow: 0 0 12px rgba(255, 204, 0, 0.4);
+    transform: translateY(-4px);
+}
+
+/* General Slot Contents */
+.slot-key {
+    position: absolute;
+    top: 2px;
+    left: 4px;
+    font-size: 10px;
+    font-family: 'Press Start 2P', monospace;
+    color: #aaaaaa;
+    text-shadow: 1px 1px 0 #000;
+    z-index: 5;
+}
+
+.hotbar-slot.active .slot-key {
+    color: #ffcc00;
+}
+
+.item-icon {
+    width: 36px;
+    height: 36px;
+    image-rendering: pixelated;
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    z-index: 2;
+}
+
+.item-count {
+    position: absolute;
+    bottom: 2px;
+    right: 4px;
+    font-size: 11px;
+    font-family: 'Press Start 2P', monospace;
+    color: #ffffff;
+    text-shadow: 1.5px 1.5px 0px #000;
+    z-index: 5;
+}
+
+/* Durability Bar */
+.durability-bar {
+    position: absolute;
+    bottom: 3px;
+    left: 4px;
+    right: 4px;
+    height: 4px;
+    background: #000000;
+    border: 0.5px solid #333333;
+    border-radius: 1px;
+    overflow: hidden;
+    z-index: 5;
+}
+
+.durability-fill {
+    height: 100%;
+    transition: width 0.1s ease;
+}
+
+/* Menu Overlays */
+.overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
+}
+
+#main-menu {
+    background: radial-gradient(circle at center, rgba(15, 15, 25, 0.4) 0%, rgba(10, 10, 15, 0.8) 100%);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+#pause-menu, #inventory-overlay {
+    background: rgba(10, 10, 15, 0.7);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+}
+
+.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.menu-content {
+    background: rgba(25, 25, 35, 0.85);
+    border: 3px solid #4a4a5e;
+    border-radius: 8px;
+    padding: 40px;
+    width: 450px;
+    max-width: 90%;
+    text-align: center;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+    animation: menu-pop 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.2);
+}
+
+@keyframes menu-pop {
+    from { transform: scale(0.92); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+.game-title {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 26px;
+    color: #ffffff;
+    text-shadow: 4px 4px 0px #3f3f3f, 6px 6px 0px #000000;
+    line-height: 1.4;
+    margin-bottom: 35px;
+}
+
+.game-title .subtitle {
+    font-family: 'Outfit', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    color: #ffcc00;
+    letter-spacing: 4px;
+}
+
+.mc-button {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 11px;
+    padding: 14px 20px;
+    color: #e0e0e0;
+    background: linear-gradient(to bottom, #7a7a7a 0%, #4e4e4e 100%);
+    border: 2px solid #000000;
+    border-top-color: #afafaf;
+    border-left-color: #8c8c8c;
+    border-bottom-color: #2c2c2c;
+    border-right-color: #3e3e3e;
+    cursor: pointer;
+    text-shadow: 1px 1px 0px #000;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    outline: none;
+}
+
+.mc-button:hover {
+    color: #ffffa0;
+    background: linear-gradient(to bottom, #8c8c8c 0%, #5a5a5a 100%);
+    border-top-color: #c0c0c0;
+    border-left-color: #9c9c9c;
+}
+
+.mc-button:active {
+    transform: translateY(1px);
+    background: linear-gradient(to bottom, #444444 0%, #666666 100%);
+    border-top-color: #222222;
+    border-left-color: #222222;
+}
+
+/* Inventory Overlay Grid layout */
+#inventory-screen {
+    background: rgba(28, 28, 38, 0.95);
+    border: 4px solid #3c3c4a;
+    border-radius: 8px;
+    width: 820px;
+    max-width: 95%;
+    padding: 24px;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8);
+    display: flex;
+    flex-direction: column;
+    animation: menu-pop 0.18s cubic-bezier(0.175, 0.885, 0.32, 1.15);
+}
+
+.inventory-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid #3c3c4a;
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+}
+
+.inventory-header h2 {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 16px;
+    color: #ffffff;
+    text-shadow: 2px 2px 0 #000;
+}
+
+.close-instruction {
+    font-size: 12px;
+    font-weight: 600;
+    color: #9ca3af;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid #3c3c4a;
+}
+
+.inventory-body {
+    display: flex;
+    gap: 24px;
+}
+
+/* Left Section: 3x3 Crafting */
+.crafting-section {
+    flex: 1.1;
+    background: rgba(16, 16, 22, 0.5);
+    border: 2px solid #3c3c4a;
+    border-radius: 6px;
+    padding: 16px;
+}
+
+.crafting-section h3 {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 11px;
+    margin-bottom: 16px;
+    color: #ffcc00;
+}
+
+.crafting-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    background: rgba(0,0,0,0.25);
+    padding: 16px;
+    border-radius: 6px;
+    border: 1px solid #22222b;
+    margin-bottom: 16px;
+}
+
+.crafting-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 44px);
+    grid-gap: 4px;
+}
+
+.inv-slot {
+    position: relative;
+    width: 44px;
+    height: 44px;
+    background: rgba(40, 40, 52, 0.8);
+    border: 2px solid #4a4a5e;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.inv-slot:hover {
+    background: rgba(60, 60, 75, 0.9);
+    border-color: #8888a5;
+}
+
+.crafting-arrow {
+    font-size: 32px;
+    color: #4a4a5e;
+    text-shadow: 1px 1px 0 #000;
+}
+
+.crafting-result-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.crafting-output {
+    width: 52px;
+    height: 52px;
+    background: rgba(45, 65, 45, 0.8);
+    border: 2px solid #5a8a5a;
+    box-shadow: inset 0 0 10px rgba(0,255,0,0.1);
+}
+
+.crafting-output:hover {
+    background: rgba(55, 85, 55, 0.9);
+    border-color: #7ab87a;
+}
+
+.result-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: #5a8a5a;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.recipes-guide {
+    font-size: 11px;
+    color: #d1d5db;
+    border-top: 1px dashed #3c3c4a;
+    padding-top: 12px;
+}
+
+.recipes-guide h4 {
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: #ffcc00;
+}
+
+.recipes-guide ul {
+    list-style-type: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-left: 4px;
+}
+
+/* Right Section: Storage (Main Inventory + Hotbar Mirror) */
+.storage-section {
+    flex: 1.5;
+    background: rgba(16, 16, 22, 0.5);
+    border: 2px solid #3c3c4a;
+    border-radius: 6px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.storage-section h3 {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 11px;
+    color: #a1a1aa;
+}
+
+.inventory-grid {
+    display: grid;
+    grid-template-columns: repeat(9, 44px);
+    grid-gap: 4px;
+    background: rgba(0,0,0,0.2);
+    padding: 8px;
+    border-radius: 4px;
+}
+
+.hotbar-grid {
+    display: grid;
+    grid-template-columns: repeat(9, 44px);
+    grid-gap: 4px;
+    background: rgba(255, 204, 0, 0.05);
+    padding: 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 204, 0, 0.15);
+}
+
+/* Floating mouse item */
+#floating-item {
+    position: absolute;
+    width: 44px;
+    height: 44px;
+    pointer-events: none;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#floating-item .item-icon {
+    width: 36px;
+    height: 36px;
+}
+
+/* Controls grid modal contents */
+.modal-content {
+    width: 500px;
+}
+
+.modal-content h2 {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 15px;
+    margin-bottom: 25px;
+    color: #ffcc00;
+}
+
+.controls-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 30px;
+    text-align: left;
+    background: rgba(10, 10, 15, 0.4);
+    padding: 20px;
+    border-radius: 6px;
+    border: 1px solid #3c3c4a;
+}
+
+.control-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.05);
+    padding-bottom: 8px;
+}
+
+.control-row:last-child {
+    border-bottom: none;
+}
+
+.key {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 9px;
+    background: #3e3e4f;
+    border: 1px solid #5a5a6f;
+    border-bottom: 3px solid #22222b;
+    border-radius: 4px;
+    padding: 6px 10px;
+    color: #ffcc00;
+    text-shadow: 1px 1px 0 #000;
+}
+
+.action {
+    font-size: 13px;
+    color: #d1d5db;
+}
+
+/* Prompt Box */
+#resume-prompt {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 50;
+    pointer-events: none;
+    animation: pulse 2s infinite ease-in-out;
+}
+
+.prompt-box {
+    background: rgba(15, 15, 25, 0.85);
+    border: 2px solid #ffcc00;
+    border-radius: 20px;
+    padding: 10px 24px;
+}
+
+.prompt-box p {
+    font-size: 13px;
+    font-weight: 600;
+    color: #ffcc00;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: translate(-50%, 0px); opacity: 0.7; }
+    50% { transform: translate(-50%, -4px); opacity: 1; }
+}

@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Web - Voxel Clone</title>
+    <link rel="stylesheet" href="src/style.css">
+    <!-- Google Fonts for retro/modern style -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <!-- Three.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+    <!-- 3D Canvas Container -->
+    <div id="canvas-container"></div>
+
+    <!-- Crosshair and Mining Loader -->
+    <div id="crosshair-container">
+        <div id="crosshair"></div>
+        <!-- Circular Progress Ring for Mining -->
+        <svg id="mining-progress" class="hidden" width="36" height="36" viewBox="0 0 36 36">
+            <circle class="bg" cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="3"></circle>
+            <circle class="bar" cx="18" cy="18" r="15" fill="none" stroke="#ffcc00" stroke-width="3" 
+                    stroke-dasharray="94.2" stroke-dashoffset="94.2" transform="rotate(-90 18 18)"></circle>
+        </svg>
+    </div>
+
+    <!-- HUD Overlay (Hotbar) -->
+    <div id="hud">
+        <div id="hotbar">
+            <!-- 9 hotbar slots, items injected dynamically by Inventory.js -->
+            <div class="hotbar-slot active" data-index="0" id="hud-slot-0"></div>
+            <div class="hotbar-slot" data-index="1" id="hud-slot-1"></div>
+            <div class="hotbar-slot" data-index="2" id="hud-slot-2"></div>
+            <div class="hotbar-slot" data-index="3" id="hud-slot-3"></div>
+            <div class="hotbar-slot" data-index="4" id="hud-slot-4"></div>
+            <div class="hotbar-slot" data-index="5" id="hud-slot-5"></div>
+            <div class="hotbar-slot" data-index="6" id="hud-slot-6"></div>
+            <div class="hotbar-slot" data-index="7" id="hud-slot-7"></div>
+            <div class="hotbar-slot" data-index="8" id="hud-slot-8"></div>
+        </div>
+    </div>
+
+    <!-- Inventory & Crafting Screen Overlay (Toggled with 'E') -->
+    <div id="inventory-overlay" class="overlay hidden">
+        <div id="inventory-screen">
+            <div class="inventory-header">
+                <h2>Inventory & Crafting</h2>
+                <span class="close-instruction">Press [E] to Close</span>
+            </div>
+            
+            <div class="inventory-body">
+                <!-- Left: 3x3 Crafting Grid -->
+                <div class="crafting-section">
+                    <h3>Crafting</h3>
+                    <div class="crafting-container">
+                        <div class="crafting-grid">
+                            <!-- 9 input slots (0-8) -->
+                            <div class="inv-slot crafting-input" data-craft-index="0"></div>
+                            <div class="inv-slot crafting-input" data-craft-index="1"></div>
+                            <div class="inv-slot crafting-input" data-craft-index="2"></div>
+                            <div class="inv-slot crafting-input" data-craft-index="3"></div>
+                            <div class="inv-slot crafting-input" data-craft-index="4"></div>
+                            <div class="inv-slot crafting-input" data-craft-index="5"></div>
+                            <div class="inv-slot crafting-input" data-craft-index="6"></div>
+                            <div class="inv-slot crafting-input" data-craft-index="7"></div>
+                            <div class="inv-slot crafting-input" data-craft-index="8"></div>
+                        </div>
+                        <div class="crafting-arrow">➔</div>
+                        <div class="crafting-result-wrapper">
+                            <div class="inv-slot crafting-output" id="crafting-output"></div>
+                            <span class="result-label">Result</span>
+                        </div>
+                    </div>
+                    
+                    <div class="recipes-guide">
+                        <h4>Quick Recipes:</h4>
+                        <ul>
+                            <li><strong>Planks</strong>: 1 Wood in any slot</li>
+                            <li><strong>Sticks</strong>: 2 Planks vertically stacked</li>
+                            <li><strong>Pickaxe</strong>: 3 Planks (top row) + 2 Sticks (mid/low center)</li>
+                            <li><strong>Torches</strong>: 1 Coal (top) + 1 Stick (bottom)</li>
+                            <li><strong>Bricks</strong>: 4 Stone (2x2 square)</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Right: 27-slot Inventory & 9-slot Hotbar Mirror -->
+                <div class="storage-section">
+                    <h3>Storage</h3>
+                    <div class="inventory-grid" id="main-inventory-grid">
+                        <!-- 27 storage slots (indices 9 to 35) injected dynamically by JS -->
+                    </div>
+                    
+                    <h3>Hotbar</h3>
+                    <div class="hotbar-grid" id="hotbar-inventory-grid">
+                        <!-- 9 hotbar mirror slots (indices 0 to 8) injected dynamically by JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Item Cursor Overlay -->
+    <div id="floating-item" class="hidden"></div>
+
+    <!-- Main Menu Overlay -->
+    <div id="main-menu" class="overlay">
+        <div class="menu-content">
+            <h1 class="game-title">MINECRAFT<br><span class="subtitle">WEB CLONE V2</span></h1>
+            <div class="menu-buttons">
+                <button id="btn-play" class="mc-button">Play Game</button>
+                <button id="btn-controls" class="mc-button">Controls</button>
+            </div>
+            <div class="menu-footer">
+                <p>Features: Biomes, Caves, Durability, Crafting & Animals</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Controls Modal -->
+    <div id="controls-modal" class="overlay hidden">
+        <div class="menu-content modal-content">
+            <h2>Game Controls</h2>
+            <div class="controls-grid">
+                <div class="control-row"><span class="key">W, A, S, D</span> <span class="action">Move Player</span></div>
+                <div class="control-row"><span class="key">Spacebar</span> <span class="action">Jump / Swim Up</span></div>
+                <div class="control-row"><span class="key">Left Click</span> <span class="action">Mine / Break (Hold to Break)</span></div>
+                <div class="control-row"><span class="key">Right Click</span> <span class="action">Place Block / Use active item</span></div>
+                <div class="control-row"><span class="key">E</span> <span class="action">Toggle Inventory & Crafting</span></div>
+                <div class="control-row"><span class="key">1 - 9 / Scroll</span> <span class="action">Select Active Slot</span></div>
+                <div class="control-row"><span class="key">Esc</span> <span class="action">Pause Game / Menu</span></div>
+            </div>
+            <button id="btn-controls-back" class="mc-button">Back</button>
+        </div>
+    </div>
+
+    <!-- Pause Menu Overlay -->
+    <div id="pause-menu" class="overlay hidden">
+        <div class="menu-content">
+            <h2 class="menu-heading">Game Paused</h2>
+            <div class="menu-buttons">
+                <button id="btn-resume" class="mc-button">Resume Game</button>
+                <button id="btn-reset" class="mc-button">Reset World</button>
+                <button id="btn-menu" class="mc-button">Quit to Title</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Resume Prompt Overlay -->
+    <div id="resume-prompt" class="hidden">
+        <div class="prompt-box">
+            <p>Click anywhere to resume playing</p>
+        </div>
+    </div>
+
+    <!-- Load game scripts sequentially -->
+    <script src="src/Noise.js"></script>
+    <script src="src/TextureManager.js"></script>
+    <script src="src/Inventory.js"></script>
+    <script src="src/World.js"></script>
+    <script src="src/Player.js"></script>
+    <script src="src/MobManager.js"></script>
+    <script src="src/main.js"></script>
+</body>
+</html>
