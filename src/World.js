@@ -1,6 +1,6 @@
 /**
- * World - Manages voxel chunks, multi-biome terrain generation, 3D caves,
- * customized torch geometry, and a dynamic pool of orange point-lights.
+ * World - Manages voxel chunks, multi-biomes, caves, custom torches,
+ * dynamic shadow casting point-lights with flame wobbles, and smooth Ambient Occlusion.
  */
 class World {
     constructor(scene, textureManager) {
@@ -12,10 +12,10 @@ class World {
         this.chunkDepth = 16;
         this.chunkHeight = 32;
 
-        // Seeded noise generator
-        this.noise = new window.ImprovedNoise(67890); // Different seed for variety
+        // Seeded noise
+        this.noise = new window.ImprovedNoise(88888);
         
-        // Chunk storage: maps 'cx,cz' -> { voxels: Uint8Array, mesh: THREE.Mesh, waterMesh: THREE.Mesh, cx, cz }
+        // Chunk storage
         this.chunks = new Map();
         
         // Render distance
@@ -24,50 +24,46 @@ class World {
         // Material compile
         this.texture = this.textureManager.createThreeTexture();
         
-        // Solid blocks material
         this.solidMaterial = new THREE.MeshLambertMaterial({
             map: this.texture,
             transparent: true,
             alphaTest: 0.15,
-            side: THREE.FrontSide
+            side: THREE.FrontSide,
+            vertexColors: true // Enables vertex colors mapping for Ambient Occlusion
         });
 
-        // Water material
         this.waterMaterial = new THREE.MeshLambertMaterial({
             map: this.texture,
             transparent: true,
-            opacity: 0.6,
-            side: THREE.DoubleSide
+            opacity: 0.65,
+            side: THREE.DoubleSide,
+            vertexColors: true
         });
 
-        // Tracking active meshes in scene for raycasting
+        // Scene meshes tracking
         this.activeMeshes = [];
 
-        // Placed torches global registry (stores absolute coordinates as string 'x,y,z')
+        // Placed torches global registry ('x,y,z')
         this.placedTorches = new Set();
 
-        // Point light pool (max 10 lights to maintain performance)
+        // Point light pool
         this.maxLights = 10;
         this.lightPool = [];
-        this.activeLights = [];
         this.initLightPool();
     }
 
-    /**
-     * Set up a pool of warm point-lights
-     */
     initLightPool() {
         for (let i = 0; i < this.maxLights; i++) {
-            const light = new THREE.PointLight(0xffaa44, 0, 12, 1.5); // Warm yellow-orange
+            // Warm orange/red fire glow
+            const light = new THREE.PointLight(0xff5511, 0, 14, 2.0);
             light.visible = false;
+            light.castShadow = false; // Disable point light shadows to prevent destructive interference overlaps
+
             this.scene.add(light);
             this.lightPool.push(light);
         }
     }
 
-    /**
-     * Converts global coordinates to chunk coordinates
-     */
     globalToChunkCoords(x, y, z) {
         return {
             cx: Math.floor(x / this.chunkWidth),
@@ -78,26 +74,20 @@ class World {
         };
     }
 
-    /**
-     * Get block at global coordinates
-     */
     getBlock(x, y, z) {
-        if (y < 0) return 3; // Bedrock barrier (Stone)
-        if (y >= this.chunkHeight) return 0; // Air above sky
+        if (y < 0) return 3; // Stone bedrock barrier
+        if (y >= this.chunkHeight) return 0; // Air
 
         const { cx, cz, lx, ly, lz } = this.globalToChunkCoords(x, y, z);
         const chunkKey = `${cx},${cz}`;
         
         const chunk = this.chunks.get(chunkKey);
-        if (!chunk) return 0; // Air for ungenerated chunks
+        if (!chunk) return 0;
 
         const index = lx + ly * this.chunkWidth + lz * this.chunkWidth * this.chunkHeight;
         return chunk.voxels[index];
     }
 
-    /**
-     * Set block at global coordinates and rebuild affected chunk meshes
-     */
     setBlock(x, y, z, blockType) {
         if (y < 0 || y >= this.chunkHeight) return;
 
@@ -105,7 +95,6 @@ class World {
         const chunkKey = `${cx},${cz}`;
         const blockKey = `${Math.floor(x)},${Math.floor(y)},${Math.floor(z)}`;
         
-        // Force chunk generation if it doesn't exist
         let chunk = this.chunks.get(chunkKey);
         if (!chunk) {
             chunk = this.generateChunkData(cx, cz);
@@ -116,59 +105,43 @@ class World {
         const oldType = chunk.voxels[index];
         chunk.voxels[index] = blockType;
 
-        // Manage torch lights
-        if (oldType === 10) {
-            this.placedTorches.delete(blockKey);
-        }
-        if (blockType === 10) {
-            this.placedTorches.add(blockKey);
-        }
+        if (oldType === 10) this.placedTorches.delete(blockKey);
+        if (blockType === 10) this.placedTorches.add(blockKey);
 
-        // Rebuild this chunk mesh
         this.rebuildChunkMesh(cx, cz);
 
-        // If we edited a border block, we must rebuild the neighboring chunk too
         if (lx === 0) this.rebuildChunkMesh(cx - 1, cz);
         if (lx === this.chunkWidth - 1) this.rebuildChunkMesh(cx + 1, cz);
         if (lz === 0) this.rebuildChunkMesh(cx, cz - 1);
         if (lz === this.chunkDepth - 1) this.rebuildChunkMesh(cx, cz + 1);
     }
 
-    /**
-     * Generates a chunk's voxel data arrays procedurally with Biomes & Caves
-     */
     generateChunkData(cx, cz) {
         const size = this.chunkWidth * this.chunkHeight * this.chunkDepth;
         const voxels = new Uint8Array(size);
         const chunk = { voxels, cx, cz, mesh: null, waterMesh: null };
 
-        // Generate base terrain
         for (let lx = 0; lx < this.chunkWidth; lx++) {
             for (let lz = 0; lz < this.chunkDepth; lz++) {
                 const gx = cx * this.chunkWidth + lx;
                 const gz = cz * this.chunkDepth + lz;
 
-                // 1. Biome Temperature noise
-                // Low-frequency noise: positive values are warm (Desert), negative are cold (Snowy)
-                const tempVal = this.noise.fbm2D(gx * 0.006, gz * 0.006, 2, 0.5, 2.0);
+                const tempVal = this.noise.fbm2D(gx * 0.005, gz * 0.005, 2, 0.5, 2.0);
                 
                 let biome = 'plains';
                 let height = 12;
 
                 if (tempVal > 0.16) {
                     biome = 'desert';
-                    // Flatter, undulating dunes
-                    const noiseVal = this.noise.fbm2D(gx * 0.01, gz * 0.01, 2, 0.5, 2.0);
+                    const noiseVal = this.noise.fbm2D(gx * 0.009, gz * 0.009, 2, 0.5, 2.0);
                     height = Math.floor(9 + noiseVal * 7);
                 } else if (tempVal < -0.16) {
                     biome = 'snowy';
-                    // Taller, steeper peaks
-                    const noiseVal = this.noise.fbm2D(gx * 0.018, gz * 0.018, 4, 0.5, 2.0);
-                    height = Math.floor(13 + noiseVal * 15);
+                    const noiseVal = this.noise.fbm2D(gx * 0.016, gz * 0.016, 4, 0.5, 2.0);
+                    height = Math.floor(14 + noiseVal * 14);
                 } else {
                     biome = 'plains';
-                    // Standard rolling hills
-                    const noiseVal = this.noise.fbm2D(gx * 0.014, gz * 0.014, 3, 0.5, 2.0);
+                    const noiseVal = this.noise.fbm2D(gx * 0.012, gz * 0.012, 3, 0.5, 2.0);
                     height = Math.floor(11 + noiseVal * 9);
                 }
 
@@ -178,8 +151,12 @@ class World {
                 for (let ly = 0; ly < this.chunkHeight; ly++) {
                     const idx = lx + ly * this.chunkWidth + lz * this.chunkWidth * this.chunkHeight;
                     
+                    if (ly === 0) {
+                        voxels[idx] = 3;
+                        continue;
+                    }
+
                     if (ly < height) {
-                        // Voxel layers based on Biome
                         if (biome === 'desert') {
                             if (ly >= height - 3) {
                                 voxels[idx] = 6; // Sand
@@ -188,15 +165,15 @@ class World {
                             }
                         } else if (biome === 'snowy') {
                             if (ly === height - 1) {
-                                voxels[idx] = 12; // Snow cover block
+                                voxels[idx] = 12; // Snow block
                             } else if (ly >= height - 4) {
                                 voxels[idx] = 2; // Dirt
                             } else {
                                 voxels[idx] = 3; // Stone
                             }
-                        } else { // Plains
+                        } else { // plains
                             if (ly === height - 1) {
-                                voxels[idx] = (height <= 8) ? 6 : 1; // Sand shores or Grass
+                                voxels[idx] = (height <= 8) ? 6 : 1; 
                             } else if (ly >= height - 4) {
                                 voxels[idx] = 2; // Dirt
                             } else {
@@ -204,12 +181,15 @@ class World {
                             }
                         }
 
-                        // Generate Coal Ore seams inside Stone (5% chance)
-                        if (voxels[idx] === 3 && Math.random() < 0.05) {
-                            voxels[idx] = 13; // Coal Ore
+                        if (voxels[idx] === 3) {
+                            const rand = Math.random();
+                            if (ly < 16 && rand < 0.035) {
+                                voxels[idx] = 16; // Iron Ore
+                            } else if (ly < 22 && rand < 0.05) {
+                                voxels[idx] = 13; // Coal Ore
+                            }
                         }
                     } else {
-                        // Global water level (y = 7)
                         if (ly <= 7) {
                             voxels[idx] = 7; // Water
                         } else {
@@ -220,44 +200,38 @@ class World {
             }
         }
 
-        // 2. 3D Caves subtraction
-        // Hollow out stone/dirt layers below terrain surface using 3D noise
+        // Cave hollowing
         for (let lx = 0; lx < this.chunkWidth; lx++) {
             for (let lz = 0; lz < this.chunkDepth; lz++) {
                 const gx = cx * this.chunkWidth + lx;
                 const gz = cz * this.chunkDepth + lz;
 
-                for (let ly = 0; ly < this.chunkHeight; ly++) {
+                for (let ly = 1; ly < this.chunkHeight; ly++) { 
                     const idx = lx + ly * this.chunkWidth + lz * this.chunkWidth * this.chunkHeight;
                     const block = voxels[idx];
 
-                    // Only hollow out solid blocks (stone, coal ore, dirt)
-                    if (block === 3 || block === 13 || block === 2) {
+                    if (block === 3 || block === 13 || block === 16 || block === 2) {
                         const caveNoise = this.noise.fbm3D(gx * 0.09, ly * 0.13, gz * 0.09, 3, 0.5, 2.0);
-                        
-                        // Hollow out if noise threshold exceeded and below ground level
                         if (caveNoise > 0.45 && ly < this.chunkHeight - 4) {
-                            voxels[idx] = 0; // Cave air
+                            voxels[idx] = 0; 
                         }
                     }
                 }
             }
         }
 
-        // 3. Vegetation Generation (Cactus, Trees, etc.)
+        // Spawn vegetation
         for (let lx = 2; lx < this.chunkWidth - 2; lx++) {
             for (let lz = 2; lz < this.chunkDepth - 2; lz++) {
                 const gx = cx * this.chunkWidth + lx;
                 const gz = cz * this.chunkDepth + lz;
 
-                // Re-evaluate biome at this spot
-                const tempVal = this.noise.fbm2D(gx * 0.006, gz * 0.006, 2, 0.5, 2.0);
+                const tempVal = this.noise.fbm2D(gx * 0.005, gz * 0.005, 2, 0.5, 2.0);
                 
-                // Get ground height after cave subtraction
                 let height = -1;
                 for (let y = this.chunkHeight - 1; y >= 0; y--) {
                     const idx = lx + y * this.chunkWidth + lz * this.chunkWidth * this.chunkHeight;
-                    if (voxels[idx] !== 0 && voxels[idx] !== 7) { // Solid ground
+                    if (voxels[idx] !== 0 && voxels[idx] !== 7) {
                         height = y + 1;
                         break;
                     }
@@ -268,26 +242,22 @@ class World {
                 const groundBlock = voxels[groundIdx];
 
                 if (tempVal > 0.16) {
-                    // --- Desert: Cactus Spawning ---
-                    if (groundBlock === 6 && Math.random() < 0.01) { // On sand
-                        const cactusHeight = 2 + Math.floor(Math.random() * 2); // 2 or 3 tall
+                    if (groundBlock === 6 && Math.random() < 0.01) {
+                        const cactusHeight = 2 + Math.floor(Math.random() * 2);
                         for (let ch = 0; ch < cactusHeight; ch++) {
                             const cy = height + ch;
                             const cIdx = lx + cy * this.chunkWidth + lz * this.chunkWidth * this.chunkHeight;
-                            voxels[cIdx] = 11; // Cactus
+                            voxels[cIdx] = 11;
                         }
                     }
                 } else if (tempVal < -0.16) {
-                    // --- Snowy Mountain: Sparse Snowy Trees ---
-                    if (groundBlock === 12 && Math.random() < 0.01) { // On snow
+                    if (groundBlock === 12 && Math.random() < 0.01) {
                         const trunkHeight = 4;
-                        // Trunk (Wood)
                         for (let th = 0; th < trunkHeight; th++) {
                             const ty = height + th;
                             const tIdx = lx + ty * this.chunkWidth + lz * this.chunkWidth * this.chunkHeight;
                             voxels[tIdx] = 4;
                         }
-                        // Leaves capped with snow on top
                         const leafStartY = height + trunkHeight - 2;
                         for (let dy = -1; dy <= 2; dy++) {
                             const ly = leafStartY + dy;
@@ -299,15 +269,14 @@ class World {
                                     const leafLz = lz + dz;
                                     const leafIdx = leafLx + ly * this.chunkWidth + leafLz * this.chunkWidth * this.chunkHeight;
                                     if (voxels[leafIdx] === 0) {
-                                        voxels[leafIdx] = (dy === 2) ? 12 : 5; // Snow cap at very top, leaves otherwise
+                                        voxels[leafIdx] = (dy === 2) ? 12 : 5;
                                     }
                                 }
                             }
                         }
                     }
                 } else {
-                    // --- Plains: Standard Oak Trees ---
-                    if (groundBlock === 1 && Math.random() < 0.012) { // On grass
+                    if (groundBlock === 1 && Math.random() < 0.012) {
                         const trunkHeight = 4 + Math.floor(Math.random() * 2);
                         for (let th = 0; th < trunkHeight; th++) {
                             const ty = height + th;
@@ -335,7 +304,7 @@ class World {
             }
         }
 
-        // Register any procedurally placed torches
+        // Register placed torches
         for (let i = 0; i < size; i++) {
             if (voxels[i] === 10) {
                 const lx = i % this.chunkWidth;
@@ -350,9 +319,6 @@ class World {
         return chunk;
     }
 
-    /**
-     * Rebuilds a chunk mesh if it is currently loaded
-     */
     rebuildChunkMesh(cx, cz) {
         const chunkKey = `${cx},${cz}`;
         const chunk = this.chunks.get(chunkKey);
@@ -372,21 +338,66 @@ class World {
         this.buildChunkMesh(chunk);
     }
 
+    isAOOccluder(blockId) {
+        // Water, Torches, Glass, and Air do not cast Ambient Occlusion shadows
+        return blockId !== 0 && blockId !== 7 && blockId !== 10 && blockId !== 8;
+    }
+
     /**
-     * Compiles BufferGeometry for a chunk.
-     * Generates custom stick geometry for Torches (ID 10) instead of cubes.
+     * Voxel Smooth Lighting (AO Corner Shading) Solver.
+     * Computes the ambient occlusion multiplier for a single vertex corner of an exposed face.
      */
+    getVertexAO(bx, by, bz, fx, fy, fz, tx, ty, tz) {
+        // Find side tangent coordinates based on normal direction
+        let s1x = 0, s1y = 0, s1z = 0;
+        let s2x = 0, s2y = 0, s2z = 0;
+        
+        if (fx !== 0) { 
+            s1y = ty > 0 ? 1 : -1;
+            s2z = tz > 0 ? 1 : -1;
+        } else if (fy !== 0) { 
+            s1x = tx > 0 ? 1 : -1;
+            s2z = tz > 0 ? 1 : -1;
+        } else if (fz !== 0) { 
+            s1x = tx > 0 ? 1 : -1;
+            s2y = ty > 0 ? 1 : -1;
+        }
+
+        const nx = bx + fx;
+        const ny = by + fy;
+        const nz = bz + fz;
+
+        const side1 = this.isAOOccluder(this.getBlock(nx + s1x, ny + s1y, nz + s1z));
+        const side2 = this.isAOOccluder(this.getBlock(nx + s2x, ny + s2y, nz + s2z));
+        const corner = this.isAOOccluder(this.getBlock(nx + s1x + s2x, ny + s1y + s2y, nz + s1z + s2z));
+
+        let ao = 3;
+        if (side1 && side2) {
+            ao = 0; // Fully enclosed corner
+        } else {
+            ao = 3 - (side1 ? 1 : 0) - (side2 ? 1 : 0) - (corner ? 1 : 0);
+        }
+
+        // Map occlusion rating to color multiplier
+        if (ao === 0) return 0.44;
+        if (ao === 1) return 0.64;
+        if (ao === 2) return 0.82;
+        return 1.0; // Fully lit
+    }
+
     buildChunkMesh(chunk) {
         const { cx, cz, voxels } = chunk;
 
         const solidPositions = [];
         const solidNormals = [];
         const solidUVs = [];
+        const solidColors = []; // Vertex Ambient Occlusion values
         const solidIndices = [];
 
         const waterPositions = [];
         const waterNormals = [];
         const waterUVs = [];
+        const waterColors = [];
         const waterIndices = [];
 
         const faceDirections = [
@@ -415,8 +426,6 @@ class World {
                     const globalZ = cz * this.chunkDepth + lz;
 
                     if (isTorch) {
-                        // --- Custom Torch Geometry: Small centered stick ---
-                        // Width: [0.42, 0.58], Height: [0.0, 0.65], Depth: [0.42, 0.58]
                         const tx = globalX;
                         const ty = globalY;
                         const tz = globalZ;
@@ -428,40 +437,35 @@ class World {
                         const z0 = tz + 0.42;
                         const z1 = tz + 0.58;
 
-                        // Torch rendering has 6 small faces. We do NOT cull torch faces.
                         const torchFaces = [
-                            // +X (Right)
-                            { verts: [x1, y0, z1,  x1, y0, z0,  x1, y1, z0,  x1, y1, z1], norm: [1, 0, 0], uv: 'side' },
-                            // -X (Left)
-                            { verts: [x0, y0, z0,  x0, y0, z1,  x0, y1, z1,  x0, y1, z0], norm: [-1, 0, 0], uv: 'side' },
-                            // +Y (Top)
+                            { verts: [x1, y0, z1,  x1, y0, z0,  x1, y1, z0,  x1, y1, z1], norm: [0, 1, 0], uv: 'side' },
+                            { verts: [x0, y0, z0,  x0, y0, z1,  x0, y1, z1,  x0, y1, z0], norm: [0, 1, 0], uv: 'side' },
                             { verts: [x0, y1, z1,  x1, y1, z1,  x1, y1, z0,  x0, y1, z0], norm: [0, 1, 0], uv: 'top' },
-                            // -Y (Bottom)
-                            { verts: [x0, y0, z0,  x1, y0, z0,  x1, y0, z1,  x0, y0, z1], norm: [0, -1, 0], uv: 'bottom' },
-                            // +Z (Front)
-                            { verts: [x0, y0, z1,  x1, y0, z1,  x1, y1, z1,  x0, y1, z1], norm: [0, 0, 1], uv: 'side' },
-                            // -Z (Back)
-                            { verts: [x1, y0, z0,  x0, y0, z0,  x0, y1, z0,  x1, y1, z0], norm: [0, 0, -1], uv: 'side' }
+                            { verts: [x0, y0, z0,  x1, y0, z0,  x1, y0, z1,  x0, y0, z1], norm: [0, 1, 0], uv: 'bottom' },
+                            { verts: [x0, y0, z1,  x1, y0, z1,  x1, y1, z1,  x0, y1, z1], norm: [0, 1, 0], uv: 'side' },
+                            { verts: [x1, y0, z0,  x0, y0, z0,  x0, y1, z0,  x1, y1, z0], norm: [0, 1, 0], uv: 'side' }
                         ];
 
                         torchFaces.forEach(face => {
                             const vStart = solidPositions.length / 3;
                             solidPositions.push(...face.verts);
-                            for (let i = 0; i < 4; i++) solidNormals.push(...face.norm);
+                            for (let i = 0; i < 4; i++) {
+                                solidNormals.push(...face.norm);
+                                // Torches glow fully (no AO corners)
+                                solidColors.push(1.0, 1.0, 1.0);
+                            }
                             
-                            const faceUVName = face.uv;
-                            const { u0, u1, v0, v1 } = this.textureManager.getFaceUVs(blockId, faceUVName);
+                            const { u0, u1, v0, v1 } = this.textureManager.getFaceUVs(blockId, face.uv);
                             solidUVs.push(u0, v0, u1, v0, u1, v1, u0, v1);
-                            
                             solidIndices.push(vStart, vStart + 1, vStart + 2, vStart, vStart + 2, vStart + 3);
                         });
 
-                        continue; // Done with torch block
+                        continue;
                     }
 
-                    // --- Standard Block Cube Geometry ---
+                    // Standard Cube Face Culling
                     for (let f = 0; f < 6; f++) {
-                        const { dir, name, normal } = faceDirections[f];
+                        const { dir, normal } = faceDirections[f];
                         
                         const neighborX = globalX + dir[0];
                         const neighborY = globalY + dir[1];
@@ -471,11 +475,9 @@ class World {
 
                         let drawFace = false;
                         if (isWater) {
-                            // Water exposed to Air, Glass, or Torches
                             drawFace = (neighborId === 0 || neighborId === 8 || neighborId === 10);
                         } else {
-                            // Solid: exposed to Air (0), Water (7), Glass (8), or Torches (10)
-                            if (blockId === 8) { // Glass
+                            if (blockId === 8) { 
                                 drawFace = (neighborId !== 8 && (neighborId === 0 || neighborId === 7 || neighborId === 10));
                             } else {
                                 drawFace = (neighborId === 0 || neighborId === 7 || neighborId === 8 || neighborId === 10);
@@ -486,6 +488,7 @@ class World {
                             const targetPos = isWater ? waterPositions : solidPositions;
                             const targetNorm = isWater ? waterNormals : solidNormals;
                             const targetUVs = isWater ? waterUVs : solidUVs;
+                            const targetColors = isWater ? waterColors : solidColors;
                             const targetIndices = isWater ? waterIndices : solidIndices;
                             const vStart = targetPos.length / 3;
 
@@ -509,7 +512,21 @@ class World {
                             }
 
                             targetPos.push(...verts);
-                            for (let i = 0; i < 4; i++) targetNorm.push(...normal);
+                            for (let i = 0; i < 4; i++) {
+                                targetNorm.push(...normal);
+
+                                // Compute vertex offsets and Ambient Occlusion multipliers
+                                const vx = verts[i * 3];
+                                const vy = verts[i * 3 + 1];
+                                const vz = verts[i * 3 + 2];
+                                
+                                const tx = vx - (globalX + 0.5);
+                                const ty = vy - (globalY + 0.5);
+                                const tz = vz - (globalZ + 0.5);
+                                
+                                const ao = this.getVertexAO(globalX, globalY, globalZ, dir[0], dir[1], dir[2], tx, ty, tz);
+                                targetColors.push(ao, ao, ao); // RGB multipliers mapping
+                            }
 
                             const faceUVName = (f === 2) ? 'top' : ((f === 3) ? 'bottom' : 'side');
                             const { u0, u1, v0, v1 } = this.textureManager.getFaceUVs(blockId, faceUVName);
@@ -522,39 +539,42 @@ class World {
             }
         }
 
-        // Build solid meshes
         if (solidPositions.length > 0) {
             const geometry = new THREE.BufferGeometry();
             geometry.setAttribute('position', new THREE.Float32BufferAttribute(solidPositions, 3));
             geometry.setAttribute('normal', new THREE.Float32BufferAttribute(solidNormals, 3));
             geometry.setAttribute('uv', new THREE.Float32BufferAttribute(solidUVs, 2));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(solidColors, 3)); // Injects AO colors
             geometry.setIndex(solidIndices);
             
             const mesh = new THREE.Mesh(geometry, this.solidMaterial);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            
             chunk.mesh = mesh;
             this.scene.add(mesh);
             this.activeMeshes.push(mesh);
         }
 
-        // Build water meshes
         if (waterPositions.length > 0) {
             const geometry = new THREE.BufferGeometry();
             geometry.setAttribute('position', new THREE.Float32BufferAttribute(waterPositions, 3));
             geometry.setAttribute('normal', new THREE.Float32BufferAttribute(waterNormals, 3));
             geometry.setAttribute('uv', new THREE.Float32BufferAttribute(waterUVs, 2));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(waterColors, 3));
             geometry.setIndex(waterIndices);
 
             const mesh = new THREE.Mesh(geometry, this.waterMaterial);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+
             chunk.waterMesh = mesh;
             this.scene.add(mesh);
             this.activeMeshes.push(mesh);
         }
     }
 
-    /**
-     * Update chunks list around player position
-     */
-    updateChunksAroundPlayer(playerX, playerZ) {
+    updateChunksAroundPlayer(playerX, playerZ, sunIntensity = 0.65) {
         const playerChunk = this.globalToChunkCoords(playerX, 0, playerZ);
         const pcx = playerChunk.cx;
         const pcz = playerChunk.cz;
@@ -600,56 +620,125 @@ class World {
             if (chunk.waterMesh) this.activeMeshes.push(chunk.waterMesh);
         }
 
-        // Manage torch lights pool
-        this.updateTorchLights(playerX, playerZ);
+        this.updateTorchLights(playerX, playerZ, sunIntensity);
     }
 
-    /**
-     * Dynamic Torch Light manager:
-     * Sorts all torches in range by distance to player and binds the nearest 10 to PointLights
-     */
-    updateTorchLights(playerX, playerZ) {
-        // Collect active torches coordinates
+    updateTorchLights(playerX, playerZ, sunIntensity = 0.65) {
         const torchesList = [];
         for (const key of this.placedTorches) {
             const [tx, ty, tz] = key.split(',').map(Number);
             const dx = tx - playerX;
             const dz = tz - playerZ;
             const distSq = dx * dx + dz * dz;
-            
-            // Render distance boundary check (only process torches within range of ~64 blocks)
             if (distSq < 4000) {
                 torchesList.push({ tx, ty, tz, distSq });
             }
         }
 
-        // Sort by distance (closest first)
         torchesList.sort((a, b) => a.distSq - b.distSq);
 
-        // Map up to 10 nearest torches to the PointLight pool
         const count = Math.min(this.maxLights, torchesList.length);
+        const time = Date.now() * 0.015;
         
         for (let i = 0; i < this.maxLights; i++) {
             const light = this.lightPool[i];
             
             if (i < count) {
                 const torch = torchesList[i];
-                // Center the light inside the torch block (sligthly above bottom)
-                light.position.set(torch.tx + 0.5, torch.ty + 0.65, torch.tz + 0.5);
                 
-                // Set intensity and warm glowing color
-                light.intensity = 2.0 + Math.sin(Date.now() * 0.008 + i) * 0.15; // Gentle torch flickering!
+                // Realistic 3D flame jitter wobble
+                const wobbleX = Math.sin(time + i) * 0.035;
+                const wobbleY = Math.cos(time * 0.8 + i) * 0.045; // Vertical flicker bias
+                const wobbleZ = Math.sin(time * 1.3 + i) * 0.035;
+
+                light.position.set(
+                    torch.tx + 0.5 + wobbleX, 
+                    torch.ty + 0.65 + wobbleY, 
+                    torch.tz + 0.5 + wobbleZ
+                );
+                
+                // Scale intensity based on day/night: Day is dim (0.35), Night is bright (1.85)
+                const maxSun = 0.65;
+                const dayFactor = Math.min(1.0, Math.max(0.0, sunIntensity / maxSun));
+                const baseIntensity = 0.35 + (1.0 - dayFactor) * 1.5;
+                
+                // Fluctuate intensity with flicker wobble
+                light.intensity = baseIntensity * (1.0 + Math.sin(time * 0.5 + i) * 0.08 + Math.cos(time * 1.1) * 0.03);
                 light.visible = true;
+
+                light.castShadow = false;
             } else {
                 light.visible = false;
                 light.intensity = 0;
+                light.castShadow = false;
             }
         }
     }
 
     /**
-     * Clear all chunks for resetting
+     * Day/Night sky, fog, and light interpolation engine
      */
+    updateDayNightCycle(timePercent, sunLight, ambientLight) {
+        const now = timePercent; // Range: [0.0, 1.0]
+
+        let skyColor = new THREE.Color(0x7ec0ee);
+        let sunIntensity = 0.65;
+        let ambientIntensity = 0.48;
+
+        // Day/Night transition stages
+        if (now >= 0.0 && now < 0.42) {
+            skyColor.setHex(0x7ec0ee);
+            sunIntensity = 0.65;
+            ambientIntensity = 0.48;
+        } else if (now >= 0.42 && now < 0.55) {
+            const t = (now - 0.42) / 0.13;
+            const daySky = new THREE.Color(0x7ec0ee);
+            const duskSky = new THREE.Color(0xd35400); 
+            const nightSky = new THREE.Color(0x0a0a14); 
+            
+            if (t < 0.5) {
+                skyColor.copy(daySky).lerp(duskSky, t * 2);
+            } else {
+                skyColor.copy(duskSky).lerp(nightSky, (t - 0.5) * 2);
+            }
+            
+            sunIntensity = 0.65 - (0.65 - 0.18) * t; // Smoothly fades to moonlight intensity
+            ambientIntensity = 0.48 * (1.0 - t * 0.7); 
+        } else if (now >= 0.55 && now < 0.88) {
+            skyColor.setHex(0x05050f); 
+            sunIntensity = 0.18; // Moonlight active at night
+            ambientIntensity = 0.12; 
+        } else {
+            const t = (now - 0.88) / 0.12;
+            const nightSky = new THREE.Color(0x05050f);
+            const dawnSky = new THREE.Color(0xe67e22); 
+            const daySky = new THREE.Color(0x7ec0ee);
+
+            if (t < 0.5) {
+                skyColor.copy(nightSky).lerp(dawnSky, t * 2);
+            } else {
+                skyColor.copy(dawnSky).lerp(daySky, (t - 0.5) * 2);
+            }
+
+            sunIntensity = 0.18 + (0.65 - 0.18) * t; // Fades back to full sunlight
+            ambientIntensity = 0.12 + (0.48 - 0.12) * t;
+        }
+
+        // Apply background and fog colors
+        this.scene.background.copy(skyColor);
+        if (this.scene.fog) {
+            this.scene.fog.color.copy(skyColor);
+        }
+
+        if (sunLight) {
+            sunLight.intensity = sunIntensity;
+        }
+
+        if (ambientLight) {
+            ambientLight.intensity = ambientIntensity;
+        }
+    }
+
     clearWorld() {
         for (const chunk of this.chunks.values()) {
             if (chunk.mesh) {
@@ -667,9 +756,9 @@ class World {
         this.lightPool.forEach(l => {
             l.visible = false;
             l.intensity = 0;
+            l.castShadow = false;
         });
     }
 }
 
-// Make globally available
 window.World = World;

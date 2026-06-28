@@ -4,7 +4,7 @@
  */
 class TextureManager {
     constructor() {
-        this.tileSize = 16; // 16x16 pixels per block face
+        this.tileSize = 16;
         this.atlasCols = 8;
         this.atlasRows = 8;
         this.atlasSize = this.tileSize * this.atlasCols; // 128x128 pixels total
@@ -30,7 +30,9 @@ class TextureManager {
             snow:         { c: 7, r: 1 },
             
             torch_side:   { c: 0, r: 2 },
-            torch_top:    { c: 1, r: 2 }
+            torch_top:    { c: 1, r: 2 },
+            cobblestone:  { c: 2, r: 2 },
+            iron_ore:     { c: 3, r: 2 }
         };
 
         // Create the atlas canvas
@@ -40,7 +42,7 @@ class TextureManager {
         this.ctx = this.atlasCanvas.getContext('2d');
 
         // Map block IDs to their face textures
-        // Face order: +X, -X, +Y, -Y, +Z, -Z (Right, Left, Top, Bottom, Front, Back)
+        // Face order: +X, -X, +Y, -Y, +Z, -Z
         this.blockFaces = {
             1: { top: 'grass_top',   bottom: 'dirt',        side: 'grass_side' },   // Grass
             2: { top: 'dirt',        bottom: 'dirt',        side: 'dirt' },         // Dirt
@@ -53,18 +55,16 @@ class TextureManager {
             9: { top: 'brick',       bottom: 'brick',       side: 'brick' },        // Brick
             10: { top: 'torch_top',  bottom: 'torch_side',  side: 'torch_side' },   // Torch
             11: { top: 'cactus_top', bottom: 'cactus_top',  side: 'cactus_side' },  // Cactus
-            12: { top: 'snow',       bottom: 'dirt',        side: 'grass_side' },   // Snow (Snow cover top, grassy side, dirt bottom)
+            12: { top: 'snow',       bottom: 'dirt',        side: 'grass_side' },   // Snow
             13: { top: 'coal_ore',   bottom: 'coal_ore',    side: 'coal_ore' },     // Coal Ore
-            14: { top: 'planks',     bottom: 'planks',      side: 'planks' }        // Wood Planks
+            14: { top: 'planks',     bottom: 'planks',      side: 'planks' },       // Planks
+            15: { top: 'cobblestone',bottom: 'cobblestone', side: 'cobblestone' },  // Cobblestone
+            16: { top: 'iron_ore',   bottom: 'iron_ore',    side: 'iron_ore' }      // Iron Ore
         };
 
-        // Generate the atlas and item icons
         this.generateAtlas();
     }
 
-    /**
-     * Set a pixel with color variation
-     */
     setPixel(ctx, x, y, r, g, b, a = 1, variation = 15) {
         const v = (Math.random() - 0.5) * variation;
         const R = Math.max(0, Math.min(255, Math.floor(r + v)));
@@ -74,13 +74,9 @@ class TextureManager {
         ctx.fillRect(x, y, 1, 1);
     }
 
-    /**
-     * Draw individual textures onto temporary canvases and blit them onto the atlas
-     */
     generateAtlas() {
         const size = this.tileSize;
 
-        // Helper to create a face canvas
         const createFace = () => {
             const canvas = document.createElement('canvas');
             canvas.width = size;
@@ -130,7 +126,7 @@ class TextureManager {
             }
         }
 
-        // 5. Wood Side (Bark)
+        // 5. Wood Side
         const woodSide = createFace();
         for (let y = 0; y < size; y++) {
             for (let x = 0; x < size; x++) {
@@ -159,7 +155,7 @@ class TextureManager {
             }
         }
 
-        // 7. Leaves (Semi-transparent)
+        // 7. Leaves
         const leaves = createFace();
         for (let y = 0; y < size; y++) {
             for (let x = 0; x < size; x++) {
@@ -239,10 +235,7 @@ class TextureManager {
         const coalOre = createFace();
         for (let y = 0; y < size; y++) {
             for (let x = 0; x < size; x++) {
-                // Stone base
                 this.setPixel(coalOre.ctx, x, y, 125, 125, 128, 1, 12);
-                
-                // Add Coal spots
                 const isCoal = (x === 3 && y === 4) || (x === 4 && y === 4) || (x === 3 && y === 5) ||
                                (x === 10 && y === 2) || (x === 11 && y === 3) ||
                                (x === 6 && y === 10) || (x === 7 && y === 11) || (x === 8 && y === 11) ||
@@ -260,9 +253,9 @@ class TextureManager {
                 const isRib = x % 4 === 0;
                 const isSpike = (x + y * 2) % 6 === 0 && Math.random() < 0.3;
                 if (isSpike) {
-                    this.setPixel(cactusSide.ctx, x, y, 240, 240, 245, 1, 5); // White needles
+                    this.setPixel(cactusSide.ctx, x, y, 240, 240, 245, 1, 5);
                 } else if (isRib) {
-                    this.setPixel(cactusSide.ctx, x, y, 25, 90, 20, 1, 10); // Dark ribs
+                    this.setPixel(cactusSide.ctx, x, y, 25, 90, 20, 1, 10);
                 } else {
                     this.setPixel(cactusSide.ctx, x, y, 35, 120, 30, 1, 12);
                 }
@@ -300,37 +293,63 @@ class TextureManager {
         torchSide.ctx.clearRect(0, 0, size, size);
         for (let y = 0; y < size; y++) {
             for (let x = 0; x < size; x++) {
-                // Torch matches a stick centered horizontally in X (columns 7-8)
-                const isStick = (x === 7 || x === 8) && y >= 6;
-                const isCoalHead = (x === 7 || x === 8) && y >= 3 && y <= 5;
-                const isFlame = (x >= 6 && x <= 9) && y <= 2;
-                
+                // Thicker stick (6 pixels wide: 5 to 10)
+                const isStick = (x >= 5 && x <= 10) && y >= 6;
+                const isCoalHead = (x >= 5 && x <= 10) && y >= 3 && y <= 5;
+                const isFlame = (x >= 4 && x <= 11) && y <= 2;
                 if (isFlame) {
-                    this.setPixel(torchSide.ctx, x, y, 255, 150, 30, 1, 30); // Orange/yellow glow
+                    this.setPixel(torchSide.ctx, x, y, 255, 150, 30, 1, 30);
                 } else if (isCoalHead) {
-                    this.setPixel(torchSide.ctx, x, y, 40, 40, 42, 1, 5); // Dark coal
+                    this.setPixel(torchSide.ctx, x, y, 60, 55, 52, 1, 5);
                 } else if (isStick) {
-                    this.setPixel(torchSide.ctx, x, y, 140, 105, 65, 1, 10); // Brown stick
+                    this.setPixel(torchSide.ctx, x, y, 150, 110, 70, 1, 12);
                 }
             }
         }
 
-        // 18. Torch Top (Flame cross section)
+        // 18. Torch Top
         const torchTop = createFace();
         torchTop.ctx.clearRect(0, 0, size, size);
         for (let y = 0; y < size; y++) {
             for (let x = 0; x < size; x++) {
                 const isInnerFlame = x >= 7 && x <= 8 && y >= 7 && y <= 8;
-                const isOuterGlow = x >= 6 && x <= 9 && y >= 6 && y <= 9;
+                const isOuterGlow = x >= 5 && x <= 10 && y >= 5 && y <= 10;
                 if (isInnerFlame) {
-                    this.setPixel(torchTop.ctx, x, y, 255, 230, 80, 1, 10); // Bright core
+                    this.setPixel(torchTop.ctx, x, y, 255, 230, 80, 1, 10);
                 } else if (isOuterGlow) {
-                    this.setPixel(torchTop.ctx, x, y, 255, 140, 20, 0.9, 15); // Outer flame
+                    this.setPixel(torchTop.ctx, x, y, 255, 140, 20, 0.9, 15);
                 }
             }
         }
 
-        // Blit all generated textures to our atlas canvas
+        // 19. Cobblestone (Rough rocky stones)
+        const cobble = createFace();
+        for (let y = 0; y < size; y++) {
+            for (let x = 0; x < size; x++) {
+                const isBorder = x === 0 || y === 0 || x === size - 1 || y === size - 1 || x % 5 === 0 || y % 5 === 0;
+                if (isBorder) {
+                    this.setPixel(cobble.ctx, x, y, 80, 80, 82, 1, 10); // Dark mortar seams
+                } else {
+                    this.setPixel(cobble.ctx, x, y, 115, 115, 118, 1, 15); // Rough stone panels
+                }
+            }
+        }
+
+        // 20. Iron Ore (Stone with orange specks)
+        const ironOre = createFace();
+        for (let y = 0; y < size; y++) {
+            for (let x = 0; x < size; x++) {
+                this.setPixel(ironOre.ctx, x, y, 125, 125, 128, 1, 12); // Stone base
+                const isIron = (x === 2 && y === 3) || (x === 3 && y === 3) || (x === 11 && y === 5) || 
+                               (x === 12 && y === 6) || (x === 5 && y === 10) || (x === 6 && y === 9) || 
+                               (x === 8 && y === 12) || (x === 9 && y === 11);
+                if (isIron) {
+                    this.setPixel(ironOre.ctx, x, y, 190, 140, 100, 1, 10); // Tan/orange raw iron deposits
+                }
+            }
+        }
+
+        // Blit all generated textures
         const blit = (canvas, name) => {
             const coord = this.tileCoords[name];
             if (coord) {
@@ -358,14 +377,13 @@ class TextureManager {
         
         blit(torchSide.c, 'torch_side');
         blit(torchTop.c, 'torch_top');
+        blit(cobble.c, 'cobblestone');
+        blit(ironOre.c, 'iron_ore');
 
-        // Generate non-block item icons for the inventory screen
+        // Generate item icons
         this.generateItemIcons();
     }
 
-    /**
-     * Generates separate icons for items (Stick, Coal, Wooden Pickaxe, Torch icon)
-     */
     generateItemIcons() {
         this.itemIcons = {};
         const size = 16;
@@ -377,79 +395,142 @@ class TextureManager {
             return { c: canvas, ctx: canvas.getContext('2d') };
         };
 
-        // 1. Stick Icon (slanted line)
+        // 1. Stick
         const stick = createIcon();
         for (let i = 2; i < 14; i++) {
-            // Draw diagonal wood line
             this.setPixel(stick.ctx, i, 15 - i, 130, 95, 60, 1, 10);
             this.setPixel(stick.ctx, i + 1, 15 - i, 100, 70, 40, 1, 5);
         }
         this.itemIcons['stick'] = stick.c.toDataURL();
 
-        // 2. Coal Icon (rock lump)
+        // 2. Coal
         const coal = createIcon();
         for (let y = 0; y < size; y++) {
             for (let x = 0; x < size; x++) {
                 const dx = x - 7.5;
                 const dy = y - 7.5;
                 const dist = Math.sqrt(dx*dx + dy*dy);
-                if (dist < 5.0 && !(Math.abs(dx) > 3.5 && Math.abs(dy) > 3.5)) {
+                if (dist < 4.5 && !(Math.abs(dx) > 3.0 && Math.abs(dy) > 3.0)) {
                     this.setPixel(coal.ctx, x, y, 40, 40, 45, 1, 15);
                 }
             }
         }
         this.itemIcons['coal'] = coal.c.toDataURL();
 
-        // 3. Wooden Pickaxe Icon
-        const pick = createIcon();
-        // Handle (diagonal stick)
-        for (let i = 2; i < 11; i++) {
-            this.setPixel(pick.ctx, i, 15 - i, 130, 95, 60, 1, 0);
-            this.setPixel(pick.ctx, i + 1, 14 - i, 100, 70, 40, 1, 0);
+        // 3. Raw Iron (rust brown lump)
+        const rawIron = createIcon();
+        for (let y = 0; y < size; y++) {
+            for (let x = 0; x < size; x++) {
+                const dx = x - 7.5;
+                const dy = y - 7.5;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist < 4.5 && !(Math.abs(dx) > 3.0 && Math.abs(dy) > 3.0)) {
+                    this.setPixel(rawIron.ctx, x, y, 190, 140, 100, 1, 15);
+                }
+            }
         }
-        // Pickaxe head (curved top-left to top-right)
-        // Draw head using Wood Planks colors
-        const headPoints = [
-            {x: 8, y: 2}, {x: 9, y: 2}, {x: 10, y: 2}, {x: 11, y: 2}, {x: 12, y: 3}, {x: 13, y: 4}, {x: 14, y: 5},
-            {x: 7, y: 2}, {x: 6, y: 2}, {x: 5, y: 2}, {x: 4, y: 2}, {x: 3, y: 3}, {x: 2, y: 4}, {x: 1, y: 5}
-        ];
-        headPoints.forEach(p => {
-            this.setPixel(pick.ctx, p.x, p.y, 160, 130, 85, 1, 10);
-            this.setPixel(pick.ctx, p.x, p.y + 1, 115, 90, 55, 1, 5); // Bottom shading
-        });
-        this.itemIcons['wooden_pickaxe'] = pick.c.toDataURL();
+        this.itemIcons['raw_iron'] = rawIron.c.toDataURL();
 
-        // 4. Torch Icon (little slanted torch)
+        // 4. Iron Ingot (diagonal shiny bar)
+        const ingot = createIcon();
+        for (let i = 4; i < 12; i++) {
+            this.setPixel(ingot.ctx, i, 14 - i, 220, 220, 225, 1, 5);
+            this.setPixel(ingot.ctx, i + 1, 15 - i, 230, 230, 235, 1, 0); // Shiny reflection
+            this.setPixel(ingot.ctx, i - 1, 15 - i, 140, 140, 145, 1, 10); // Shaded edge
+        }
+        this.itemIcons['iron_ingot'] = ingot.c.toDataURL();
+
+        // 5. Raw Porkchop (pink meat lump with a white bone tip)
+        const meat = createIcon();
+        for (let y = 0; y < size; y++) {
+            for (let x = 0; x < size; x++) {
+                const dx = x - 7.5;
+                const dy = y - 7.5;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist < 5.0) {
+                    this.setPixel(meat.ctx, x, y, 225, 120, 115, 1, 12);
+                }
+            }
+        }
+        // Bone tip (bottom-left)
+        this.setPixel(meat.ctx, 2, 13, 245, 245, 245, 1, 0);
+        this.setPixel(meat.ctx, 3, 12, 245, 245, 245, 1, 0);
+        this.itemIcons['porkchop'] = meat.c.toDataURL();
+
+        // Helper to draw tool shapes
+        const drawTool = (headColor, shadedHeadColor) => {
+            const tool = createIcon();
+            // Handle
+            for (let i = 2; i < 11; i++) {
+                this.setPixel(tool.ctx, i, 15 - i, 130, 95, 60, 1, 0);
+                this.setPixel(tool.ctx, i + 1, 14 - i, 100, 70, 40, 1, 0);
+            }
+            return { c: tool.c, ctx: tool.ctx };
+        };
+
+        // 6. Pickaxes
+        const buildPick = (color, shade) => {
+            const tool = drawTool();
+            const headPoints = [
+                {x: 8, y: 2}, {x: 9, y: 2}, {x: 10, y: 2}, {x: 11, y: 2}, {x: 12, y: 3}, {x: 13, y: 4}, {x: 14, y: 5},
+                {x: 7, y: 2}, {x: 6, y: 2}, {x: 5, y: 2}, {x: 4, y: 2}, {x: 3, y: 3}, {x: 2, y: 4}, {x: 1, y: 5}
+            ];
+            headPoints.forEach(p => {
+                this.setPixel(tool.ctx, p.x, p.y, color[0], color[1], color[2], 1, 10);
+                this.setPixel(tool.ctx, p.x, p.y + 1, shade[0], shade[1], shade[2], 1, 5);
+            });
+            return tool.c.toDataURL();
+        };
+
+        this.itemIcons['wooden_pickaxe'] = buildPick([160, 130, 85], [115, 90, 55]);
+        this.itemIcons['stone_pickaxe'] = buildPick([125, 125, 128], [90, 90, 95]);
+        this.itemIcons['iron_pickaxe'] = buildPick([220, 220, 225], [140, 140, 145]);
+
+        // 7. Swords (straight long diagonal blade)
+        const buildSword = (color, shade) => {
+            const tool = createIcon();
+            // Handle hilt stick (bottom-left)
+            this.setPixel(tool.ctx, 2, 13, 100, 70, 40, 1, 0);
+            this.setPixel(tool.ctx, 3, 12, 100, 70, 40, 1, 0);
+            // Hilt crossbar
+            this.setPixel(tool.ctx, 4, 12, 130, 95, 60, 1, 0);
+            this.setPixel(tool.ctx, 3, 13, 130, 95, 60, 1, 0);
+            this.setPixel(tool.ctx, 4, 11, 130, 95, 60, 1, 0);
+            this.setPixel(tool.ctx, 5, 12, 130, 95, 60, 1, 0);
+            
+            // Blade (diagonal up-right)
+            for (let i = 5; i < 14; i++) {
+                this.setPixel(tool.ctx, i, 15 - i, color[0], color[1], color[2], 1, 10);
+                this.setPixel(tool.ctx, i + 1, 14 - i, shade[0], shade[1], shade[2], 1, 5);
+            }
+            return tool.c.toDataURL();
+        };
+
+        this.itemIcons['wooden_sword'] = buildSword([160, 130, 85], [115, 90, 55]);
+        this.itemIcons['stone_sword'] = buildSword([125, 125, 128], [90, 90, 95]);
+        this.itemIcons['iron_sword'] = buildSword([220, 220, 225], [140, 140, 145]);
+
+        // 8. Torch Icon
         const torch = createIcon();
         for (let i = 4; i < 11; i++) {
             this.setPixel(torch.ctx, i, 15 - i, 140, 105, 65, 1, 5);
         }
-        // Coal head
         this.setPixel(torch.ctx, 11, 4, 50, 50, 52, 1, 0);
         this.setPixel(torch.ctx, 10, 5, 50, 50, 52, 1, 0);
-        // Flame
         this.setPixel(torch.ctx, 11, 3, 255, 130, 10, 1, 15);
         this.setPixel(torch.ctx, 12, 2, 255, 160, 20, 1, 15);
         this.setPixel(torch.ctx, 12, 3, 255, 80, 0, 1, 15);
         this.itemIcons['torch'] = torch.c.toDataURL();
     }
 
-    /**
-     * Returns the procedural DataURL icon for any item or block
-     */
     getItemIconDataURL(itemId) {
-        // If it's a non-block item
-        if (itemId === 'stick') return this.itemIcons['stick'];
-        if (itemId === 'coal') return this.itemIcons['coal'];
-        if (itemId === 'wooden_pickaxe') return this.itemIcons['wooden_pickaxe'];
-        if (itemId === 10) return this.itemIcons['torch']; // Special torch icon
+        if (this.itemIcons[itemId]) return this.itemIcons[itemId];
+        if (itemId === 10) return this.itemIcons['torch'];
 
-        // For blocks, grab their TOP texture from the atlas and scale it for the slot
         const blockName = this.blockFaces[itemId] ? this.blockFaces[itemId].top : 'dirt';
         const coord = this.tileCoords[blockName];
         if (!coord) return '';
 
-        // Extract the 16x16 square from our atlas and draw it onto a temp canvas
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = 16;
         tempCanvas.height = 16;
@@ -460,17 +541,11 @@ class TextureManager {
             coord.r * this.tileSize, 
             this.tileSize, 
             this.tileSize, 
-            0, 
-            0, 
-            16, 
-            16
+            0, 0, 16, 16
         );
         return tempCanvas.toDataURL();
     }
 
-    /**
-     * Create Three.js Texture from the compiled Atlas canvas
-     */
     createThreeTexture() {
         const texture = new THREE.CanvasTexture(this.atlasCanvas);
         texture.magFilter = THREE.NearestFilter;
@@ -481,9 +556,6 @@ class TextureManager {
         return texture;
     }
 
-    /**
-     * Returns the 4 pairs of [u, v] texture coordinates for a given face of a block
-     */
     getFaceUVs(blockId, faceName) {
         const config = this.blockFaces[blockId];
         if (!config) return { u0: 0, u1: 0.125, v0: 0, v1: 0.125 };
@@ -501,7 +573,6 @@ class TextureManager {
         const vMin = (this.atlasRows - 1 - coord.r) / this.atlasRows;
         const vMax = (this.atlasRows - coord.r) / this.atlasRows;
 
-        // Inset slightly to prevent bleeding
         const eps = 0.0002;
         const u0 = uMin + eps;
         const u1 = uMax - eps;
@@ -512,5 +583,4 @@ class TextureManager {
     }
 }
 
-// Make globally available
 window.TextureManager = TextureManager;

@@ -2,10 +2,10 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Minecraft Web - Voxel Clone</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Minecraft Web - Voxel Mobile Survival Clone</title>
     <link rel="stylesheet" href="src/style.css">
-    <!-- Google Fonts for retro/modern style -->
+    <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
@@ -15,6 +15,9 @@
 <body>
     <!-- 3D Canvas Container -->
     <div id="canvas-container"></div>
+
+    <!-- Red Damage Screen Flash Overlay -->
+    <div id="damage-flash" class="hidden"></div>
 
     <!-- Crosshair and Mining Loader -->
     <div id="crosshair-container">
@@ -27,8 +30,16 @@
         </svg>
     </div>
 
-    <!-- HUD Overlay (Hotbar) -->
+    <!-- HUD Overlay (Hotbar + Hearts + Hunger + Oxygen) -->
     <div id="hud">
+        <!-- Survival Status Bars -->
+        <div id="hud-stats">
+            <div id="health-bar" class="stat-row"></div>
+            <div id="oxygen-bar" class="stat-row hidden"></div>
+            <div id="hunger-bar" class="stat-row"></div>
+        </div>
+
+        <!-- Hotbar slots -->
         <div id="hotbar">
             <!-- 9 hotbar slots, items injected dynamically by Inventory.js -->
             <div class="hotbar-slot active" data-index="0" id="hud-slot-0"></div>
@@ -43,12 +54,36 @@
         </div>
     </div>
 
-    <!-- Inventory & Crafting Screen Overlay (Toggled with 'E') -->
+    <!-- Mobile Touch Controls Overlay (Revealed via Media Query) -->
+    <div id="mobile-controls">
+        <!-- Left: Virtual D-pad -->
+        <div id="mobile-dpad">
+            <button id="md-up" class="mobile-btn select-none">▲</button>
+            <div class="dpad-mid">
+                <button id="md-left" class="mobile-btn select-none">◀</button>
+                <div class="dpad-center"></div>
+                <button id="md-right" class="mobile-btn select-none">▶</button>
+            </div>
+            <button id="md-down" class="mobile-btn select-none">▼</button>
+        </div>
+
+        <!-- Right: Action Buttons -->
+        <div id="mobile-actions">
+            <button id="ma-inv" class="mobile-btn action-btn select-none">INV</button>
+            <div class="actions-row">
+                <button id="ma-place" class="mobile-btn action-btn select-none">PLACE</button>
+                <button id="ma-mine" class="mobile-btn action-btn select-none">MINE</button>
+            </div>
+            <button id="ma-jump" class="mobile-btn action-btn select-none">JUMP</button>
+        </div>
+    </div>
+
+    <!-- Inventory & Crafting Screen Overlay (Toggled with 'E' or Mobile 'INV' button) -->
     <div id="inventory-overlay" class="overlay hidden">
         <div id="inventory-screen">
             <div class="inventory-header">
-                <h2>Inventory & Crafting</h2>
-                <span class="close-instruction">Press [E] to Close</span>
+                <h2>Survival Inventory & Crafting</h2>
+                <span class="close-instruction">Press [E] or [INV] to Close</span>
             </div>
             
             <div class="inventory-body">
@@ -76,14 +111,17 @@
                     </div>
                     
                     <div class="recipes-guide">
-                        <h4>Quick Recipes:</h4>
-                        <ul>
-                            <li><strong>Planks</strong>: 1 Wood in any slot</li>
-                            <li><strong>Sticks</strong>: 2 Planks vertically stacked</li>
-                            <li><strong>Pickaxe</strong>: 3 Planks (top row) + 2 Sticks (mid/low center)</li>
-                            <li><strong>Torches</strong>: 1 Coal (top) + 1 Stick (bottom)</li>
-                            <li><strong>Bricks</strong>: 4 Stone (2x2 square)</li>
-                        </ul>
+                        <h4>Recipes Guide:</h4>
+                        <div class="recipes-scrollable">
+                            <ul>
+                                <li><strong>Smelt Iron</strong>: 1 Iron Ore + 1 Coal ➔ 1 Iron Ingot</li>
+                                <li><strong>Sticks</strong>: 2 Planks vertically stacked ➔ 4 Sticks</li>
+                                <li><strong>Pickaxes</strong>: 3 Planks / Stone / Iron (top) + 2 Sticks (vertical center)</li>
+                                <li><strong>Swords</strong>: 2 Planks / Stone / Iron (vertical) + 1 Stick (bottom center)</li>
+                                <li><strong>Torches</strong>: 1 Coal (top) + 1 Stick (bottom)</li>
+                                <li><strong>Bricks</strong>: 4 Stone / Cobblestone (2x2 square)</li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
 
@@ -109,13 +147,13 @@
     <!-- Main Menu Overlay -->
     <div id="main-menu" class="overlay">
         <div class="menu-content">
-            <h1 class="game-title">MINECRAFT<br><span class="subtitle">WEB CLONE V2</span></h1>
+            <h1 class="game-title">MINECRAFT<br><span class="subtitle">SURVIVAL WEB V4</span></h1>
             <div class="menu-buttons">
                 <button id="btn-play" class="mc-button">Play Game</button>
                 <button id="btn-controls" class="mc-button">Controls</button>
             </div>
             <div class="menu-footer">
-                <p>Features: Biomes, Caves, Durability, Crafting & Animals</p>
+                <p>Features: Mobile Controls, Voxel Mob Anatomy & Audio</p>
             </div>
         </div>
     </div>
@@ -123,14 +161,14 @@
     <!-- Controls Modal -->
     <div id="controls-modal" class="overlay hidden">
         <div class="menu-content modal-content">
-            <h2>Game Controls</h2>
+            <h2>Survival Controls</h2>
             <div class="controls-grid">
                 <div class="control-row"><span class="key">W, A, S, D</span> <span class="action">Move Player</span></div>
                 <div class="control-row"><span class="key">Spacebar</span> <span class="action">Jump / Swim Up</span></div>
-                <div class="control-row"><span class="key">Left Click</span> <span class="action">Mine / Break (Hold to Break)</span></div>
-                <div class="control-row"><span class="key">Right Click</span> <span class="action">Place Block / Use active item</span></div>
+                <div class="control-row"><span class="key">Left Click</span> <span class="action">Mine Blocks / Attack Mobs</span></div>
+                <div class="control-row"><span class="key">Right Click</span> <span class="action">Place Blocks / Eat Food</span></div>
                 <div class="control-row"><span class="key">E</span> <span class="action">Toggle Inventory & Crafting</span></div>
-                <div class="control-row"><span class="key">1 - 9 / Scroll</span> <span class="action">Select Active Slot</span></div>
+                <div class="control-row"><span class="key">1 - 9 / Scroll</span> <span class="action">Select Hotbar Slot</span></div>
                 <div class="control-row"><span class="key">Esc</span> <span class="action">Pause Game / Menu</span></div>
             </div>
             <button id="btn-controls-back" class="mc-button">Back</button>
@@ -143,7 +181,7 @@
             <h2 class="menu-heading">Game Paused</h2>
             <div class="menu-buttons">
                 <button id="btn-resume" class="mc-button">Resume Game</button>
-                <button id="btn-reset" class="mc-button">Reset World</button>
+                <button id="btn-reset" class="mc-button">Respawn / Reset World</button>
                 <button id="btn-menu" class="mc-button">Quit to Title</button>
             </div>
         </div>
@@ -159,6 +197,7 @@
     <!-- Load game scripts sequentially -->
     <script src="src/Noise.js"></script>
     <script src="src/TextureManager.js"></script>
+    <script src="src/AudioManager.js"></script>
     <script src="src/Inventory.js"></script>
     <script src="src/World.js"></script>
     <script src="src/Player.js"></script>

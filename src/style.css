@@ -26,6 +26,27 @@ body, html {
     z-index: 1;
 }
 
+/* Red Screen Vignette for damage flash */
+#damage-flash {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 99;
+    background: radial-gradient(circle, rgba(255, 0, 0, 0) 30%, rgba(255, 0, 0, 0.55) 100%);
+    border: 4px solid rgba(255, 0, 0, 0.7);
+    box-shadow: inset 0 0 80px rgba(255, 0, 0, 0.7);
+    opacity: 0;
+    transition: opacity 0.25s ease-out;
+}
+
+#damage-flash.flash-active {
+    opacity: 1;
+    transition: none; /* Instant flash on impact */
+}
+
 /* Crosshair and Mining Container */
 #crosshair-container {
     position: absolute;
@@ -69,7 +90,7 @@ body, html {
 #mining-progress {
     position: absolute;
     transform: rotate(0deg);
-    transition: opacity 0.15s ease;
+    transition: opacity 0.1s ease;
 }
 
 #mining-progress.hidden {
@@ -77,7 +98,7 @@ body, html {
     pointer-events: none;
 }
 
-/* HUD (Hotbar) */
+/* HUD Overlay */
 #hud {
     position: absolute;
     bottom: 20px;
@@ -85,6 +106,53 @@ body, html {
     transform: translateX(-50%);
     z-index: 10;
     pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+/* HUD Stats Row (Health, Hunger, Oxygen) */
+#hud-stats {
+    display: flex;
+    justify-content: space-between;
+    width: 532px; /* Matches hotbar outer width roughly */
+    position: relative;
+    padding: 0 4px;
+}
+
+.stat-row {
+    display: flex;
+    gap: 2px;
+    align-items: center;
+}
+
+#health-bar {
+    justify-content: flex-start;
+}
+
+#hunger-bar {
+    justify-content: flex-end;
+}
+
+#oxygen-bar {
+    position: absolute;
+    bottom: 24px;
+    right: 4px;
+    display: flex;
+    gap: 2px;
+}
+
+#oxygen-bar.hidden {
+    display: none;
+}
+
+/* Pixel Heart/Drumstick/Bubble SVGs styling */
+.hud-icon {
+    width: 18px;
+    height: 18px;
+    image-rendering: pixelated;
+    filter: drop-shadow(1.5px 1.5px 0px rgba(0,0,0,0.8));
 }
 
 #hotbar {
@@ -240,7 +308,7 @@ body, html {
 
 .game-title .subtitle {
     font-family: 'Outfit', sans-serif;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 600;
     color: #ffcc00;
     letter-spacing: 4px;
@@ -277,7 +345,7 @@ body, html {
     border-left-color: #222222;
 }
 
-/* Inventory Overlay Grid layout */
+/* Inventory Overlay Grid */
 #inventory-screen {
     background: rgba(28, 28, 38, 0.95);
     border: 4px solid #3c3c4a;
@@ -322,13 +390,15 @@ body, html {
     gap: 24px;
 }
 
-/* Left Section: 3x3 Crafting */
+/* Left Section: Crafting */
 .crafting-section {
     flex: 1.1;
     background: rgba(16, 16, 22, 0.5);
     border: 2px solid #3c3c4a;
     border-radius: 6px;
     padding: 16px;
+    display: flex;
+    flex-direction: column;
 }
 
 .crafting-section h3 {
@@ -373,6 +443,12 @@ body, html {
     border-color: #8888a5;
 }
 
+/* Active inventory item highlight inside grid overlay */
+.inv-slot.active {
+    border-color: #ffcc00;
+    box-shadow: inset 0 0 6px rgba(255, 204, 0, 0.4);
+}
+
 .crafting-arrow {
     font-size: 32px;
     color: #4a4a5e;
@@ -391,7 +467,6 @@ body, html {
     height: 52px;
     background: rgba(45, 65, 45, 0.8);
     border: 2px solid #5a8a5a;
-    box-shadow: inset 0 0 10px rgba(0,255,0,0.1);
 }
 
 .crafting-output:hover {
@@ -412,6 +487,9 @@ body, html {
     color: #d1d5db;
     border-top: 1px dashed #3c3c4a;
     padding-top: 12px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
 }
 
 .recipes-guide h4 {
@@ -420,15 +498,33 @@ body, html {
     color: #ffcc00;
 }
 
+.recipes-scrollable {
+    max-height: 115px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+/* Custom scrollbar for recipes */
+.recipes-scrollable::-webkit-scrollbar {
+    width: 4px;
+}
+.recipes-scrollable::-webkit-scrollbar-track {
+    background: rgba(0,0,0,0.1);
+}
+.recipes-scrollable::-webkit-scrollbar-thumb {
+    background: #4a4a5e;
+    border-radius: 2px;
+}
+
 .recipes-guide ul {
     list-style-type: none;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 5px;
     padding-left: 4px;
 }
 
-/* Right Section: Storage (Main Inventory + Hotbar Mirror) */
+/* Right Section: Storage */
 .storage-section {
     flex: 1.5;
     background: rgba(16, 16, 22, 0.5);
@@ -482,9 +578,9 @@ body, html {
     height: 36px;
 }
 
-/* Controls grid modal contents */
+/* Controls Modal */
 .modal-content {
-    width: 500px;
+    width: 520px;
 }
 
 .modal-content h2 {
@@ -562,4 +658,154 @@ body, html {
 @keyframes pulse {
     0%, 100% { transform: translate(-50%, 0px); opacity: 0.7; }
     50% { transform: translate(-50%, -4px); opacity: 1; }
+}
+
+/* Mobile Touch Controls Overlay */
+#mobile-controls {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none; /* Let clicks pass through to swipe-look unless hitting a button */
+    z-index: 95;
+    display: none; /* Hidden on desktop by default */
+    justify-content: space-between;
+    align-items: flex-end;
+    padding: 30px;
+}
+
+.mobile-btn {
+    pointer-events: auto; /* Buttons catch touch events */
+    background: rgba(45, 45, 55, 0.65);
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    border-bottom-width: 4px;
+    border-radius: 8px;
+    color: #ffffff;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+    touch-action: manipulation;
+}
+
+.mobile-btn:active {
+    background: rgba(90, 90, 110, 0.85);
+    border-color: #ffcc00;
+    border-bottom-width: 2px;
+    transform: translateY(2px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+}
+
+/* Virtual D-pad Container */
+#mobile-dpad {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+#mobile-dpad .mobile-btn {
+    width: 50px;
+    height: 50px;
+    font-size: 18px;
+}
+
+.dpad-mid {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.dpad-center {
+    width: 50px;
+    height: 50px;
+    background: rgba(20, 20, 25, 0.3);
+    border-radius: 8px;
+}
+
+/* Right-side Action Buttons */
+#mobile-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 12px;
+}
+
+#mobile-actions .action-btn {
+    height: 46px;
+    padding: 0 16px;
+    font-size: 11px;
+}
+
+.actions-row {
+    display: flex;
+    gap: 8px;
+}
+
+#ma-inv {
+    width: 80px;
+    background: rgba(180, 100, 30, 0.7);
+    border-color: rgba(255, 150, 50, 0.5);
+}
+#ma-inv:active {
+    background: rgba(220, 120, 30, 0.9);
+}
+
+#ma-place {
+    width: 90px;
+    background: rgba(30, 120, 30, 0.7);
+    border-color: rgba(50, 200, 50, 0.5);
+}
+#ma-place:active {
+    background: rgba(30, 160, 30, 0.9);
+}
+
+#ma-mine {
+    width: 90px;
+    background: rgba(160, 30, 30, 0.7);
+    border-color: rgba(250, 50, 50, 0.5);
+}
+#ma-mine:active {
+    background: rgba(200, 30, 30, 0.9);
+}
+
+#ma-jump {
+    width: 140px;
+    height: 54px !important;
+    background: rgba(60, 60, 80, 0.7);
+    border-color: rgba(100, 100, 130, 0.5);
+    font-size: 12px !important;
+}
+
+/* Touch Device Visibility Override */
+@media (pointer: coarse), (max-width: 960px) {
+    #mobile-controls {
+        display: flex;
+    }
+    #crosshair-container {
+        pointer-events: none;
+    }
+    #hud {
+        bottom: 80px; /* Push hotbar up on mobile to avoid overlapping Dpad/Actions */
+        transform: translateX(-50%) scale(0.85); /* Slightly downscaled hotbar */
+    }
+    .overlay h2 {
+        font-size: 13px;
+    }
+    .close-instruction {
+        font-size: 9px;
+    }
+}
+
+.select-none {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
 }
